@@ -1,4 +1,5 @@
 import re
+from dataclasses import replace
 
 from ingestion.embedding.vector_store import RetrievedChunk
 from shared.arabic_normalize import normalize_arabic
@@ -57,21 +58,6 @@ def rerank_chunks(chunks: list[RetrievedChunk], query: str, language: str) -> li
     for chunk in chunks:
         overlap = keyword_overlap_score(chunk.text, terms, language)
         boosted_score = min(1.0, chunk.score + overlap * 0.35)
-        boosted.append(
-            RetrievedChunk(
-                chunk_id=chunk.chunk_id,
-                document_id=chunk.document_id,
-                title=chunk.title,
-                url=chunk.url,
-                language=chunk.language,
-                text=chunk.text,
-                score=boosted_score,
-                lexical_weights=getattr(chunk, "lexical_weights", None),
-                doc_type=getattr(chunk, "doc_type", "general"),
-                category=getattr(chunk, "category", "general"),
-                is_stub=getattr(chunk, "is_stub", False),
-                canonical_url_slug=getattr(chunk, "canonical_url_slug", ""),
-            )
-        )
+        boosted.append(replace(chunk, score=boosted_score))
 
     return sorted(boosted, key=lambda item: item.score, reverse=True)

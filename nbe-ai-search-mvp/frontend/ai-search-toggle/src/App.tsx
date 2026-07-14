@@ -5,6 +5,9 @@ type SearchMode = "traditional" | "ai";
 type Citation = {
   title: string;
   url: string;
+  category?: string | null;
+  relevance_score?: number | null;
+  reranker_score?: number | null;
 };
 
 type SearchSuggestion = {
@@ -24,6 +27,10 @@ type SearchResponse = {
   abstention_reason?: string | null;
   suggestions?: SearchSuggestion[];
   guidance?: string | null;
+  confidence_reason?: string | null;
+  query_hash?: string | null;
+  cache_hit?: boolean;
+  faithfulness?: string | null;
 };
 
 type AutocompleteResponse = {
@@ -47,7 +54,30 @@ export default function App() {
   const blurTimeoutRef = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
+  const [feedbackSent, setFeedbackSent] = useState<"helpful" | "not_helpful" | null>(null);
+
   const isArabic = useMemo(() => /[\u0600-\u06FF]/.test(query), [query]);
+
+  async function sendFeedback(vote: "helpful" | "not_helpful") {
+    if (!result?.query_hash || feedbackSent) return;
+    try {
+      await fetch(`${API_BASE}/v1/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query_hash: result.query_hash,
+          vote,
+          question: query,
+          answer: result.answer,
+          confidence: result.confidence,
+          docs: result.citations.map((c) => ({ title: c.title, url: c.url })),
+        }),
+      });
+      setFeedbackSent(vote);
+    } catch {
+      // non-blocking
+    }
+  }
 
   useEffect(() => {
     if (mode !== "ai") {
@@ -90,6 +120,7 @@ export default function App() {
     setLoading(true);
     setError(null);
     setResult(null);
+    setFeedbackSent(null);
     setShowAutocomplete(false);
 
     try {
@@ -276,7 +307,11 @@ export default function App() {
                 <div className="meta">
                   <span>Confidence: {(result.confidence * 100).toFixed(0)}%</span>
                   {result.language && <span>Language: {result.language.toUpperCase()}</span>}
+                  {result.cache_hit && <span>{isArabic ? "من الذاكرة" : "Cached"}</span>}
                 </div>
+                {result.confidence_reason && (
+                  <p className="confidence-reason">{result.confidence_reason}</p>
+                )}
                 <p className="answer">{result.answer}</p>
                 {result.citations.length > 0 && (
                   <div className="citations">
@@ -287,11 +322,45 @@ export default function App() {
                           <a href={citation.url} target="_blank" rel="noreferrer">
                             {citation.title}
                           </a>
+                          {(citation.relevance_score != null || citation.category) && (
+                            <span className="citation-meta">
+                              {citation.category ? `${citation.category} · ` : ""}
+                              {citation.relevance_score != null
+                                ? `${Math.round(citation.relevance_score * 100)}%`
+                                : ""}
+                            </span>
+                          )}
                         </li>
                       ))}
                     </ul>
                   </div>
                 )}
+                <div className="feedback-row">
+                  <span>{isArabic ? "هل كانت الإجابة مفيدة؟" : "Was this helpful?"}</span>
+                  <button
+                    type="button"
+                    className={feedbackSent === "helpful" ? "active" : ""}
+                    disabled={!!feedbackSent}
+                    onClick={() => sendFeedback("helpful")}
+                    aria-label="Helpful"
+                  >
+                    👍
+                  </button>
+                  <button
+                    type="button"
+                    className={feedbackSent === "not_helpful" ? "active" : ""}
+                    disabled={!!feedbackSent}
+                    onClick={() => sendFeedback("not_helpful")}
+                    aria-label="Not helpful"
+                  >
+                    👎
+                  </button>
+                  {feedbackSent && (
+                    <span className="feedback-thanks">
+                      {isArabic ? "شكراً لملاحظتك" : "Thanks for your feedback"}
+                    </span>
+                  )}
+                </div>
               </>
             ) : (
               <div className="no-answer">

@@ -25,6 +25,10 @@ URL_SLUG_MAP: dict[str, tuple[str, str]] = {
     "PhoneCash": ("wallet", "wallet"),
     "CustomerLogin": ("digital_banking", "digital_banking"),
     "Offers": ("offer", "offers"),
+    "News": ("news", "news"),
+    "Reports": ("report", "reports"),
+    "Corporate": ("corporate", "corporate"),
+    "SME": ("sme", "sme"),
     "ProductDetails": ("product", "products"),
     "ProductCategory": ("product", "products"),
     "CategorySubCategory": ("general", "general"),
@@ -54,6 +58,13 @@ CATEGORY_ID_MAP: dict[str, tuple[str, str]] = {
     "debitcards": ("debit_card", "cards"),
     "loans": ("loan", "loans"),
     "personalloan": ("loan", "loans"),
+    "personalloanscatid": ("loan", "loans"),
+    "personalloans": ("loan", "loans"),
+    "newautoloanid": ("loan", "loans"),
+    "autoloanid": ("loan", "loans"),
+    "homeloanid": ("loan", "loans"),
+    "mortgageloanid": ("loan", "loans"),
+    "loanid": ("loan", "loans"),
     "accounts": ("account", "accounts"),
     "phonecash": ("wallet", "wallet"),
 }
@@ -137,6 +148,10 @@ def classify_document(
     doc_type, category = "general", "general"
     if category_id and category_id in CATEGORY_ID_MAP:
         doc_type, category = CATEGORY_ID_MAP[category_id]
+    elif category_id and "loan" in category_id:
+        doc_type, category = "loan", "loans"
+    elif category_id and "newscat" in category_id:
+        doc_type, category = "news", "news"
     elif slug in URL_SLUG_MAP:
         doc_type, category = URL_SLUG_MAP[slug]
 

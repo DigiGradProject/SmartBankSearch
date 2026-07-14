@@ -1,4 +1,4 @@
-"""Evaluate retrieval quality against golden query set."""
+"""Evaluate retrieval quality against golden query set with release gate."""
 
 from __future__ import annotations
 
@@ -12,11 +12,13 @@ sys.path.insert(0, str(ROOT))
 
 from services.search_service.intent_classifier import classify_query  # noqa: E402
 from services.search_service.search import SearchService  # noqa: E402
+from shared.config import settings  # noqa: E402
 
 
 def load_golden(path: Path) -> list[dict]:
     rows: list[dict] = []
-    with path.open(encoding="utf-8") as handle:
+    # utf-8-sig strips a PowerShell/Windows BOM if present.
+    with path.open(encoding="utf-8-sig") as handle:
         for line in handle:
             line = line.strip()
             if line:
@@ -84,6 +86,7 @@ def main() -> None:
         default=ROOT / "tests" / "retrieval" / "golden_set.jsonl",
     )
     parser.add_argument("--report", action="store_true")
+    parser.add_argument("--gate", action="store_true", help="Exit non-zero if below thresholds")
     args = parser.parse_args()
 
     if hasattr(sys.stdout, "reconfigure"):
@@ -103,6 +106,20 @@ def main() -> None:
             if status == "FAIL":
                 print(f"       intent: {row['actual_intent']} (expected {row['expected_intent']})")
                 print(f"       top: {row['top_url']}")
+
+    if args.gate:
+        ok = (
+            summary["intent_accuracy"] >= settings.eval_intent_min_accuracy
+            and summary["top3_url_hit_rate"] >= settings.eval_url_min_hit_rate
+        )
+        if not ok:
+            print(
+                "GATE FAILED: "
+                f"need intent>={settings.eval_intent_min_accuracy:.0%} "
+                f"and url>={settings.eval_url_min_hit_rate:.0%}"
+            )
+            raise SystemExit(1)
+        print("GATE PASSED")
 
 
 if __name__ == "__main__":

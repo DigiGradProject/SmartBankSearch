@@ -1,8 +1,15 @@
 # NBE Enterprise AI Search Platform
 ## Implementation Plan & Enterprise Architecture Document
 
+> **Active docs (read these first):**  
+> - Model stack decisions: [`docs/enterprise-model-decisions.md`](docs/enterprise-model-decisions.md)  
+> - Phases 1–4 delivery plan: [`docs/plan-enterprise-ai-search.md`](docs/plan-enterprise-ai-search.md)  
+> - Retrieval quality redesign: [`docs/plan-retrieval-redesign.md`](docs/plan-retrieval-redesign.md)  
+>  
+> This document remains the broader platform architecture roadmap.
+
 **Document Classification:** Internal / Confidential
-**Version:** 1.0
+**Version:** 1.1
 **Prepared for:** CTO Office, Enterprise Architecture Board, National Bank of Egypt
 **Document Type:** Production Implementation Plan (Not a Prototype)
 

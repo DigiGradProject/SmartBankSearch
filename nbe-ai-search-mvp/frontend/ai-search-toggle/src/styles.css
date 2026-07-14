@@ -252,3 +252,41 @@ a.suggestion-link {
   display: inline-flex;
   align-items: center;
 }
+
+.confidence-reason {
+  margin: 0.35rem 0 0.75rem;
+  color: #4d6485;
+  font-size: 0.92rem;
+}
+
+.citation-meta {
+  margin-inline-start: 0.5rem;
+  color: #6a7f99;
+  font-size: 0.85rem;
+}
+
+.feedback-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.feedback-row button {
+  border: 1px solid #c9d7ea;
+  background: #f7faff;
+  border-radius: 8px;
+  padding: 0.35rem 0.55rem;
+  cursor: pointer;
+}
+
+.feedback-row button.active {
+  border-color: #0b3d91;
+  background: #e8f0ff;
+}
+
+.feedback-thanks {
+  color: #4d6485;
+  font-size: 0.9rem;
+}

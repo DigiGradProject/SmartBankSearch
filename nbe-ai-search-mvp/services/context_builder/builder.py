@@ -1,9 +1,11 @@
 from dataclasses import dataclass
 
 from ingestion.embedding.vector_store import RetrievedChunk
+from services.context_builder.compressor import compress_chunks
 from shared.config import settings
 from shared.document_quality import is_broken_citation_url, is_junk_document, is_low_value_document, is_menu_heavy_text
 from shared.schemas import Citation
+from shared.url_canonical import canonical_url_key
 
 
 @dataclass
@@ -27,10 +29,17 @@ def _is_citable(chunk: RetrievedChunk) -> bool:
 
 
 class ContextBuilder:
-    def build(self, query: str, chunks: list[RetrievedChunk]) -> BuiltContext:
+    def build(
+        self,
+        query: str,
+        chunks: list[RetrievedChunk],
+        *,
+        compress: bool = True,
+    ) -> BuiltContext:
         max_tokens = settings.context_max_tokens
-        primary = [chunk for chunk in chunks if _is_citable(chunk)]
-        fallback = [chunk for chunk in chunks if chunk not in primary]
+        working = compress_chunks(query, chunks) if compress else list(chunks)
+        primary = [chunk for chunk in working if _is_citable(chunk)]
+        fallback = [chunk for chunk in working if chunk not in primary]
         ordered = primary + fallback
 
         used_tokens = 0
@@ -61,8 +70,10 @@ class ContextBuilder:
 
         ranked = sorted(
             [chunk for chunk in chunks if _is_citable(chunk)],
-            key=lambda chunk: chunk.score,
-            reverse=True,
+            key=lambda chunk: (
+                -chunk.score,
+                -(1 if getattr(chunk, "category", "") else 0),
+            ),
         )
         if not ranked:
             return []
@@ -70,6 +81,9 @@ class ContextBuilder:
         top_score = ranked[0].score
         citations: list[Citation] = []
         seen_urls: set[str] = set()
+        # Prefer dominant category among top hits for ranking boost
+        categories = [getattr(c, "category", "general") or "general" for c in ranked[:5]]
+        dominant = max(set(categories), key=categories.count) if categories else "general"
 
         for chunk in ranked:
             if len(citations) >= settings.max_citations:
@@ -78,10 +92,27 @@ class ContextBuilder:
                 continue
             if top_score - chunk.score > 0.12:
                 continue
-            if not chunk.url or chunk.url in seen_urls:
+            url_key = canonical_url_key(chunk.url or "")
+            if not chunk.url or url_key in seen_urls:
                 continue
 
-            citations.append(Citation(title=chunk.title or chunk.url, url=chunk.url))
-            seen_urls.add(chunk.url)
+            category = getattr(chunk, "category", None) or "general"
+            # Soft boost display relevance when category matches dominant family
+            relevance = chunk.score
+            if category == dominant:
+                relevance = min(1.0, relevance + 0.02)
 
+            citations.append(
+                Citation(
+                    title=chunk.title or chunk.url,
+                    url=chunk.url,
+                    category=category,
+                    relevance_score=round(relevance, 3),
+                    reranker_score=round(chunk.score, 3),
+                )
+            )
+            seen_urls.add(url_key)
+
+        # Final sort by relevance descending
+        citations.sort(key=lambda c: c.relevance_score or 0.0, reverse=True)
         return citations

@@ -3,11 +3,10 @@ import re
 from pathlib import Path
 from shared.url_canonical import canonical_url_key
 
-from bs4 import BeautifulSoup
-
 from ingestion.classification.doc_classifier import classify_document
+from ingestion.classification.metadata_enricher import enrich_document_metadata, enriched_as_extra
+from ingestion.cleaning.cleaner import clean_document_text
 from ingestion.document_processing.playwright_clean import clean_playwright_content
-from shared.arabic_normalize import normalize_text
 from shared.document_quality import is_junk_document, strip_site_chrome, title_from_document
 from shared.schemas import Document, DocumentMetadata
 
@@ -65,11 +64,7 @@ def _extract_tables(data: dict) -> str:
 
 
 def clean_document_content(content: str, language: str) -> str:
-    if "<" in content and ">" in content:
-        soup = BeautifulSoup(content, "lxml")
-        content = soup.get_text("\n", strip=True)
-    content = re.sub(r"\n{3,}", "\n\n", content)
-    return normalize_text(content, language)
+    return clean_document_text(content, language)
 
 
 def process_scrape_file(path: Path) -> Document | None:
@@ -104,6 +99,13 @@ def process_scrape_file(path: Path) -> Document | None:
         language=language,
         metadata={},
     )
+    enriched = enrich_document_metadata(
+        url=url,
+        title=title,
+        content=content,
+        language=language,
+        metadata={},
+    )
 
     return Document(
         id=doc_id,
@@ -116,6 +118,7 @@ def process_scrape_file(path: Path) -> Document | None:
             source_folder=folder_name,
             block_count=len(data.get("text_blocks") or []),
             extra={
+                **enriched_as_extra(enriched),
                 "doc_type": classification.doc_type,
                 "category": classification.category,
                 "canonical_url_slug": classification.canonical_url_slug,
@@ -148,6 +151,7 @@ def load_documents_rescrape_dir(
         with path.open(encoding="utf-8") as handle:
             raw = json.load(handle)
         content = clean_playwright_content((raw.get("content") or "").strip())
+        content = clean_document_text(content, raw.get("language") or "ar")
         if len(content) < min_chars:
             continue
         meta = raw.get("metadata") or {}
@@ -237,25 +241,25 @@ def load_documents_json(path: Path) -> list[Document]:
 
 def _enrich_document_metadata(raw: dict) -> dict[str, object]:
     meta = raw.get("metadata") or {}
-    classification = classify_document(
+    enriched = enrich_document_metadata(
         url=raw.get("url") or "",
         title=raw.get("title") or "",
         content=raw.get("content") or "",
         language=raw.get("language") or "en",
         metadata=meta,
     )
-    return {
-        "content_hash": meta.get("content_hash"),
-        "has_tables": meta.get("has_tables"),
-        "extracted_at": meta.get("extracted_at"),
-        "duplicate_of": meta.get("duplicate_of"),
-        "doc_type": classification.doc_type,
-        "category": classification.category,
-        "canonical_url_slug": classification.canonical_url_slug,
-        "is_stub": classification.is_stub,
-        "quality_score": classification.quality_score,
-        "source_type": classification.source_type,
-    }
+    payload = enriched_as_extra(enriched)
+    payload.update(
+        {
+            "content_hash": meta.get("content_hash"),
+            "has_tables": meta.get("has_tables"),
+            "extracted_at": meta.get("extracted_at"),
+            "duplicate_of": meta.get("duplicate_of"),
+            "source": meta.get("source"),
+            "source_path": meta.get("source_path"),
+        }
+    )
+    return payload
 
 
 def load_documents_jsonl(
@@ -277,6 +281,7 @@ def load_documents_jsonl(
             if skip_duplicates and meta.get("duplicate_of"):
                 continue
             content = (raw.get("content") or "").strip()
+            content = clean_document_text(content, raw.get("language") or "ar")
             if len(content) < min_chars:
                 continue
             extra = _enrich_document_metadata(raw)

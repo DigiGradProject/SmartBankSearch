@@ -7,12 +7,16 @@ from starlette.responses import PlainTextResponse, Response
 
 from ingestion.embedding.vector_store import VectorStore
 from ingestion.pipeline import RUNS, run_ingestion
-from services.search_service.autocomplete import build_autocomplete
 from services.api.orchestrator import Orchestrator
+from services.feedback.service import FeedbackService
+from services.rag.metrics import FEEDBACK_TOTAL
+from services.search_service.autocomplete import build_autocomplete
 from shared.config import settings
 from shared.logging import configure_logging, get_logger
 from shared.schemas import (
     AutocompleteResponse,
+    FeedbackRequest,
+    FeedbackResponse,
     HealthComponents,
     HealthResponse,
     IngestRequest,
@@ -30,17 +34,17 @@ ABSTENTION_COUNT = Counter("nbe_search_abstentions_total", "Total abstentions", 
 
 orchestrator = Orchestrator()
 vector_store = VectorStore()
+feedback_service = FeedbackService()
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     logger.info("api_starting", chroma_chunks=vector_store.count())
-    # Warm up embedding model to avoid first-request latency spike.
     vector_store.embed_texts(["warmup"])
     yield
 
 
-app = FastAPI(title="NBE AI Search MVP", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="NBE AI Search MVP", version="1.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()],
@@ -65,16 +69,23 @@ async def health() -> HealthResponse:
 @app.post("/v1/search", response_model=SearchResponse)
 async def search(request: SearchRequest) -> SearchResponse:
     with SEARCH_LATENCY.time():
-        response = await orchestrator.search(request.query, request.language)
+        response = await orchestrator.search(request.query, request.language, debug=request.debug)
     SEARCH_REQUESTS.labels(answered=str(response.answered).lower()).inc()
     if not response.answered and response.abstention_reason:
         ABSTENTION_COUNT.labels(reason=response.abstention_reason).inc()
     return response
 
 
+@app.post("/v1/feedback", response_model=FeedbackResponse)
+async def feedback(request: FeedbackRequest) -> FeedbackResponse:
+    result = feedback_service.submit(request)
+    FEEDBACK_TOTAL.labels(vote=request.vote).inc()
+    return result
+
+
 @app.get("/v1/autocomplete", response_model=AutocompleteResponse)
 async def autocomplete(q: str = "", language: str = "auto", limit: int = 8) -> AutocompleteResponse:
-    from services.search_service.language import detect_language
+    from services.rag.language import detect_language
 
     resolved_language = detect_language(q, language)  # type: ignore[arg-type]
     suggestions = build_autocomplete(q, language, limit=limit)

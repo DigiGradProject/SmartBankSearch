@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 from ingestion.embedding.vector_store import RetrievedChunk
@@ -20,7 +21,6 @@ class BGEM3Reranker:
     def _load(self) -> Any:
         if self._model is None:
             logger.info("loading_reranker_model", model=self.model_name)
-            # Prefer sentence-transformers CrossEncoder (stable with transformers 5.x).
             try:
                 from sentence_transformers import CrossEncoder
 
@@ -57,23 +57,7 @@ class BGEM3Reranker:
             scores = [float(score) for score in raw_scores]
 
         ranked = sorted(
-            (
-                RetrievedChunk(
-                    chunk_id=chunk.chunk_id,
-                    document_id=chunk.document_id,
-                    title=chunk.title,
-                    url=chunk.url,
-                    language=chunk.language,
-                    text=chunk.text,
-                    score=max(0.0, min(1.0, score)),
-                    lexical_weights=getattr(chunk, "lexical_weights", None),
-                    doc_type=getattr(chunk, "doc_type", "general"),
-                    category=getattr(chunk, "category", "general"),
-                    is_stub=getattr(chunk, "is_stub", False),
-                    canonical_url_slug=getattr(chunk, "canonical_url_slug", ""),
-                )
-                for chunk, score in zip(chunks, scores)
-            ),
+            (replace(chunk, score=max(0.0, min(1.0, score))) for chunk, score in zip(chunks, scores)),
             key=lambda item: item.score,
             reverse=True,
         )

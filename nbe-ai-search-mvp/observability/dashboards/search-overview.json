@@ -2,10 +2,26 @@
   "version": 1,
   "panels": [
     {
-      "title": "NBE AI Search",
+      "title": "Search Requests",
       "targets": [
-        { "expr": "nbe_search_requests_total", "legend": "requests" },
-        { "expr": "nbe_search_abstentions_total", "legend": "abstentions" }
+        { "expr": "sum(rate(nbe_search_requests_total[5m]))", "legend": "req/s" },
+        { "expr": "sum(rate(nbe_search_abstentions_total[5m]))", "legend": "abstentions/s" }
+      ]
+    },
+    {
+      "title": "Latency",
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(nbe_search_latency_seconds_bucket[5m])) by (le))", "legend": "p95 total" },
+        { "expr": "histogram_quantile(0.95, sum(rate(nbe_retrieve_latency_seconds_bucket[5m])) by (le))", "legend": "p95 retrieve" },
+        { "expr": "histogram_quantile(0.95, sum(rate(nbe_rerank_latency_seconds_bucket[5m])) by (le))", "legend": "p95 rerank" },
+        { "expr": "histogram_quantile(0.95, sum(rate(nbe_llm_latency_seconds_bucket[5m])) by (le))", "legend": "p95 llm" }
+      ]
+    },
+    {
+      "title": "Semantic Cache & Feedback",
+      "targets": [
+        { "expr": "sum(rate(nbe_semantic_cache_hits_total[5m]))", "legend": "cache hits/s" },
+        { "expr": "sum(rate(nbe_feedback_total[5m])) by (vote)", "legend": "feedback {{vote}}" }
       ]
     }
   ]

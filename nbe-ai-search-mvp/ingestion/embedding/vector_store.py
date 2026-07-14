@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import chromadb
 from chromadb.config import Settings as ChromaSettings
@@ -28,6 +28,13 @@ class RetrievedChunk:
     category: str = "general"
     is_stub: bool = False
     canonical_url_slug: str = ""
+    chunk_level: str = "child"
+    parent_chunk_id: str = ""
+    section_heading: str = ""
+    page_type: str = "web_page"
+    subcategory: str = ""
+    product_name: str = ""
+    keywords: str = ""
 
 
 class VectorStore:
@@ -85,6 +92,17 @@ class VectorStore:
                     "is_stub": chunk.is_stub,
                     "canonical_url_slug": chunk.canonical_url_slug,
                     "quality_score": chunk.quality_score,
+                    "chunk_level": chunk.chunk_level,
+                    "parent_chunk_id": chunk.parent_chunk_id,
+                    "section_heading": chunk.section_heading[:200],
+                    "page_type": chunk.page_type,
+                    "subcategory": chunk.subcategory,
+                    "product_name": chunk.product_name[:180],
+                    "service_name": chunk.service_name[:120],
+                    "document_type": chunk.document_type,
+                    "intent": chunk.intent,
+                    "keywords": chunk.keywords[:300],
+                    "last_updated": chunk.last_updated[:64],
                     "lexical_weights": json.dumps(_top_lexical(weights), ensure_ascii=False),
                 }
                 for chunk, weights in zip(to_upsert, sparse_weights)
@@ -147,6 +165,13 @@ class VectorStore:
                     category=metadata.get("category", "general"),
                     is_stub=bool(metadata.get("is_stub", False)),
                     canonical_url_slug=metadata.get("canonical_url_slug", ""),
+                    chunk_level=metadata.get("chunk_level", "child"),
+                    parent_chunk_id=metadata.get("parent_chunk_id", ""),
+                    section_heading=metadata.get("section_heading", ""),
+                    page_type=metadata.get("page_type", "web_page"),
+                    subcategory=metadata.get("subcategory", ""),
+                    product_name=metadata.get("product_name", ""),
+                    keywords=metadata.get("keywords", ""),
                 )
             )
 

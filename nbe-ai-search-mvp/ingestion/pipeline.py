@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from ingestion.chunking.chunker import chunk_document
+from ingestion.chunking.chunker import chunk_document, indexable_chunks
 from ingestion.document_processing.processor import (
     load_documents_from_scrape,
     load_documents_json,
@@ -57,7 +57,7 @@ def run_ingestion(source: str = "documents_json", limit: int | None = None) -> I
 
         for document in documents:
             try:
-                chunks = chunk_document(document)
+                chunks = indexable_chunks(chunk_document(document))
                 all_chunks.extend(chunks)
                 upserted, skipped = store.upsert_chunks(chunks)
                 upserted_total += upserted

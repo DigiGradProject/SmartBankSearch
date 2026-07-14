@@ -14,4 +14,9 @@
 {"query": "كم فايده شهادة سنة بالجنيه", "language": "ar", "intent": "certificate_rate", "expected_url_contains": "LocalCertificatesID", "forbidden_url_contains": "ExchangeRates"}
 {"query": "أسعار الشهادات بالعملة الأجنبية", "language": "ar", "intent": "certificate_rate", "expected_url_contains": "ForigenCertificatesID", "forbidden_url_contains": "ExchangeRates"}
 {"query": "فتح حساب بنكي", "language": "ar", "intent": "account_open", "expected_url_contains": "Accounts"}
+{"query": "لو عايز افتح حساب بنكي اي الاوراق المطلوبة؟", "language": "ar", "intent": "account_open", "expected_url_contains": "CurrentAccountsID", "forbidden_url_contains": "OpenYourBankAccountInEgypt"}
 {"query": "انواع البطاقات البنكيه", "language": "ar", "intent": "card_types"}
+{"query": "عروض البنك", "language": "ar", "intent": "offers"}
+{"query": "خدمات الشركات", "language": "ar", "intent": "corporate"}
+{"query": "المشروعات الصغيرة والمتوسطة", "language": "ar", "intent": "sme"}
+{"query": "الأسئلة الشائعة", "language": "ar", "intent": "faq"}

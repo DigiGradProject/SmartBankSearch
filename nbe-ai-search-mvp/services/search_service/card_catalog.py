@@ -204,7 +204,15 @@ def build_card_citations(
         if url_key in seen_urls:
             continue
         seen_urls.add(url_key)
-        citations.append(Citation(title=chunk.title or chunk.url, url=chunk.url))
+        citations.append(
+            Citation(
+                title=chunk.title or chunk.url,
+                url=chunk.url,
+                category=getattr(chunk, "category", None) or "cards",
+                relevance_score=round(chunk.score, 3),
+                reranker_score=round(chunk.score, 3),
+            )
+        )
         if "CreditCardsID" in chunk.url:
             seen_families.add("credit")
         if "DepitCardsID" in chunk.url:

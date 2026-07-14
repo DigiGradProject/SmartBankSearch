@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import re
 
+from dataclasses import replace
+
 from ingestion.embedding.vector_store import RetrievedChunk
 from services.search_service.intent_classifier import QueryIntent
 from shared.arabic_normalize import normalize_arabic
@@ -33,23 +35,28 @@ INTENT_DOC_TYPE_BOOST: dict[str, dict[str, float]] = {
 }
 
 INTENT_DOC_TYPE_PENALTY: dict[str, dict[str, float]] = {
-    "exchange_rate": {"certificate": 0.35, "certificate_rate": 0.40},
+    "exchange_rate": {"certificate": 0.35, "certificate_rate": 0.40, "account": 0.35, "news": 0.25},
     "certificate_rate": {"exchange_rate": 0.30},
     "certificate_buy": {"exchange_rate": 0.20, "loan": 0.15},
-    "personal_loan": {"certificate": 0.20, "exchange_rate": 0.15},
+    "personal_loan": {"certificate": 0.20, "exchange_rate": 0.15, "news": 0.45, "account": 0.25},
     "credit_card": {"loan": 0.15, "certificate": 0.15},
 }
+
+DIASPORA_ACCOUNT_HINT = re.compile(
+    r"مبادر[ةه]|خارج\s*مصر|سفار[ةه]|قنصلي[ةه]|مغترب|الجالي[ةه]|diaspora|abroad|embassy|initiative",
+    re.I,
+)
 
 CANONICAL_SLUG_BOOST: dict[str, str] = {
     "exchange_rate": "ExchangeRatesAndCurrencyConverter",
     "certificate_types": "CertificatesID",
     "card_types": "CardsID",
     "certificate_buy": "CertificatesID",
-    "personal_loan": "Loans",
+    "personal_loan": "PersonalLoansCatID",
     "credit_card": "CreditCards",
     "branch_locator": "ATMBranch",
     "atm_locator": "ATMBranch",
-    "account_open": "Accounts",
+    "account_open": "CurrentAccountsID",
 }
 
 # SPA shells that mirror FX tables but are not canonical sources.
@@ -111,6 +118,17 @@ def apply_intent_scoring(
             if getattr(chunk, "is_stub", False):
                 score -= 0.20
 
+        if intent.intent == "account_open":
+            url = chunk.url or ""
+            query_text = normalize_arabic(query) if language == "ar" else query.lower()
+            wants_diaspora = bool(DIASPORA_ACCOUNT_HINT.search(query_text))
+            if "CurrentAccountsID" in url or "SavingLocalAccountsID" in url:
+                score += 0.30
+            if "OpenYourBankAccountInEgypt" in url and not wants_diaspora:
+                score -= 0.40
+            if "OpenYourBankAccountInEgypt" in url and wants_diaspora:
+                score += 0.30
+
         slug = getattr(chunk, "canonical_url_slug", "") or ""
         for bad_slug in NON_CANONICAL_SLUG_PENALTY.get(intent.intent, ()):
             if bad_slug in slug or bad_slug in (chunk.url or ""):
@@ -130,22 +148,19 @@ def apply_intent_scoring(
         if intent.intent == "exchange_rate" and "شهاد" in chunk.title:
             score -= 0.30
 
-        scored.append(
-            RetrievedChunk(
-                chunk_id=chunk.chunk_id,
-                document_id=chunk.document_id,
-                title=chunk.title,
-                url=chunk.url,
-                language=chunk.language,
-                text=chunk.text,
-                score=max(0.0, min(1.0, score)),
-                lexical_weights=chunk.lexical_weights,
-                doc_type=getattr(chunk, "doc_type", "general"),
-                category=getattr(chunk, "category", "general"),
-                is_stub=getattr(chunk, "is_stub", False),
-                canonical_url_slug=getattr(chunk, "canonical_url_slug", ""),
-            )
-        )
+        if intent.intent == "personal_loan":
+            url = chunk.url or ""
+            if "NewsCat" in url or "newscat" in url.lower():
+                score -= 0.45
+            elif "Loans" in url and "PersonalLoansCatID" not in url:
+                score += 0.20
+
+        if intent.intent == "exchange_rate":
+            url = chunk.url or ""
+            if any(marker in url for marker in ("CurrentAccountsID", "SavingLocalAccountsID", "AccountsID")):
+                score -= 0.40
+
+        scored.append(replace(chunk, score=max(0.0, min(1.0, score))))
 
     scored.sort(key=lambda item: item.score, reverse=True)
     return _dedupe_by_url(scored, canonical)

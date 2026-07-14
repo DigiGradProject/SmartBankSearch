@@ -13,9 +13,15 @@ class Settings(BaseSettings):
     scrape_root: Path = project_root.parent / "nbe_complete_scrape"
     chroma_path: Path = project_root / "data" / "chroma"
     # Bump when corpus schema/content changes materially.
-    chroma_collection: str = "nbe_chunks_bge_m3_v3"
+    chroma_collection: str = "nbe_chunks_bge_m3_v4"
     intent_filter_confidence: float = 0.75
     intent_filter_enabled: bool = True
+    # Staged metadata filter (analysis.md Phase A/B)
+    filter_high_confidence: float = 0.90
+    filter_min_hits_high_conf: int = 1
+    filter_min_hits_low_conf: int = 3
+    filter_allow_broad_fallback: bool = True
+    force_canonical_inject: bool = True
 
     bm25_enabled: bool = True
     bm25_index_path: Path = project_root / "data" / "bm25" / "corpus.pkl"
@@ -42,13 +48,46 @@ class Settings(BaseSettings):
     ollama_model: str = "qwen3:8b"
     # Tier 2: deeper reasoning when needed
     ollama_model_tier2: str = "qwen3:14b"
+    # Rare Tier-2 query rewrite model (feature-flagged)
+    ollama_rewrite_model: str = "qwen3:4b"
     llm_tier2_enabled: bool = True
     llm_timeout_seconds: float = 90.0
     llm_fallback_enabled: bool = True
 
+    # Enterprise feature flags (Phase 3–4)
+    minilm_intent_fallback_enabled: bool = False
+    minilm_intent_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    gliner_enabled: bool = False
+    gliner_model: str = "urchade/gliner_multi-v2.1"
+    llm_rewrite_enabled: bool = False
+    audit_log_enabled: bool = True
+    audit_log_path: Path = project_root / "data" / "logs" / "search_audit.jsonl"
+
+    # Retrieval contract
+    rerank_pool_size: int = 20
+    rerank_keep_size: int = 5
+    eval_intent_min_accuracy: float = 0.90
+    eval_url_min_hit_rate: float = 0.70
+
     redis_url: str = "redis://localhost:6379/0"
     cache_ttl_seconds: int = 3600
     cache_enabled: bool = False
+
+    # Semantic cache (Chroma similarity)
+    semantic_cache_enabled: bool = True
+    semantic_cache_collection: str = "nbe_semantic_cache"
+    semantic_cache_threshold: float = 0.95
+    semantic_cache_ttl_seconds: int = 86400
+
+    # Self-evaluation / compression / planner
+    self_eval_enabled: bool = True
+    context_compression_enabled: bool = True
+    query_planner_enabled: bool = True
+    query_planner_max_intents: int = 2
+
+    analytics_log_enabled: bool = True
+    analytics_log_path: Path = project_root / "data" / "logs" / "retrieval_analytics.jsonl"
+    feedback_log_path: Path = project_root / "data" / "logs" / "feedback.jsonl"
 
     api_host: str = "0.0.0.0"
     api_port: int = 7000

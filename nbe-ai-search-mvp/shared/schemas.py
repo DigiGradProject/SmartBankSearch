@@ -34,22 +34,37 @@ class ChunkRecord(BaseModel):
     is_stub: bool = False
     canonical_url_slug: str = ""
     quality_score: float = 0.7
+    chunk_level: str = "child"
+    parent_chunk_id: str = ""
+    section_heading: str = ""
+    page_type: str = "web_page"
+    subcategory: str = ""
+    product_name: str = ""
+    service_name: str = ""
+    document_type: str = "web_page"
+    intent: str = ""
+    keywords: str = ""
+    last_updated: str = ""
 
 
 class SearchRequest(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
     language: Literal["ar", "en", "auto"] = "auto"
+    debug: bool = False
 
 
 class AutocompleteResponse(BaseModel):
     query: str
     language: Literal["ar", "en"]
-    suggestions: list[SearchSuggestion] = Field(default_factory=list)
+    suggestions: list["SearchSuggestion"] = Field(default_factory=list)
 
 
 class Citation(BaseModel):
     title: str
     url: str
+    category: str | None = None
+    relevance_score: float | None = None
+    reranker_score: float | None = None
 
 
 class SearchSuggestion(BaseModel):
@@ -69,6 +84,31 @@ class SearchResponse(BaseModel):
     abstention_reason: str | None = None
     suggestions: list[SearchSuggestion] = Field(default_factory=list)
     guidance: str | None = None
+    structured: dict[str, str] = Field(default_factory=dict)
+    intent: str | None = None
+    query_hash: str | None = None
+    # Additive enterprise fields (backward compatible)
+    confidence_reason: str | None = None
+    cache_hit: bool = False
+    rewritten_query: str | None = None
+    entities: list[dict[str, Any]] | None = None
+    faithfulness: str | None = None
+    explain: dict[str, Any] | None = None
+
+
+class FeedbackRequest(BaseModel):
+    query_hash: str = Field(min_length=1, max_length=64)
+    vote: Literal["helpful", "not_helpful"]
+    reason: str | None = Field(default=None, max_length=2000)
+    question: str | None = Field(default=None, max_length=2000)
+    answer: str | None = None
+    docs: list[dict[str, Any]] | None = None
+    confidence: float | None = None
+
+
+class FeedbackResponse(BaseModel):
+    status: Literal["ok"] = "ok"
+    feedback_id: str
 
 
 class HealthComponents(BaseModel):

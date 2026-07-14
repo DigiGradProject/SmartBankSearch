@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from ingestion.embedding.vector_store import RetrievedChunk, VectorStore
 from ingestion.lexical.bm25_index import BM25Index, get_bm25_index
+from services.rag.metadata_filter import related_doc_types, should_broaden
 from services.search_service.intent_classifier import QueryIntent
 from shared.config import settings
 from shared.logging import get_logger
@@ -46,6 +49,34 @@ class HybridRetriever:
         index = get_bm25_index()
         return index if index.size > 0 else None
 
+    def _query_channels(
+        self,
+        query_text: str,
+        language: str,
+        *,
+        dense_k: int,
+        bm25_k: int,
+        filter_language: str | None,
+        filter_doc_types: list[str] | None,
+        bm25: BM25Index | None,
+    ) -> tuple[list[RetrievedChunk], list[RetrievedChunk]]:
+        dense_chunks = self.vector_store.query(
+            query_text,
+            dense_k,
+            language=filter_language,
+            doc_types=filter_doc_types,
+        )
+        bm25_chunks: list[RetrievedChunk] = []
+        if bm25:
+            bm25_hits = bm25.query(
+                query_text,
+                language,
+                bm25_k,
+                doc_types=filter_doc_types,
+            )
+            bm25_chunks = [bm25.to_retrieved_chunk(chunk, score) for chunk, score in bm25_hits]
+        return dense_chunks, bm25_chunks
+
     def retrieve(
         self,
         query_text: str,
@@ -60,38 +91,77 @@ class HybridRetriever:
         bm25_k = settings.bm25_top_k
         filter_language = language if apply_filter else None
         filter_doc_types = doc_types if apply_filter else None
-
-        dense_chunks = self.vector_store.query(
-            query_text,
-            dense_k,
-            language=filter_language,
-            doc_types=filter_doc_types,
-        )
-        filter_applied = apply_filter and bool(dense_chunks)
-
         bm25 = self._get_bm25()
-        bm25_chunks: list[RetrievedChunk] = []
-        if bm25:
-            bm25_hits = bm25.query(
-                query_text,
-                language,
-                bm25_k,
-                doc_types=filter_doc_types,
-            )
-            bm25_chunks = [bm25.to_retrieved_chunk(chunk, score) for chunk, score in bm25_hits]
 
-        if apply_filter and len(dense_chunks) < 3 and len(bm25_chunks) < 3:
+        dense_chunks, bm25_chunks = self._query_channels(
+            query_text,
+            language,
+            dense_k=dense_k,
+            bm25_k=bm25_k,
+            filter_language=filter_language,
+            filter_doc_types=filter_doc_types,
+            bm25=bm25,
+        )
+        filter_applied = apply_filter and bool(dense_chunks or bm25_chunks)
+        filter_stage = "L0" if apply_filter else "none"
+
+        if apply_filter and should_broaden(
+            intent,
+            dense_count=len(dense_chunks),
+            bm25_count=len(bm25_chunks),
+        ):
+            # L1/L2: expand to related parent types before full broad.
+            related = related_doc_types(intent)
+            exact = list(doc_types or [])
+            if related and related != exact:
+                logger.info(
+                    "intent_filter_related_expand",
+                    intent=intent.intent,
+                    from_types=exact,
+                    to_types=related,
+                    dense_count=len(dense_chunks),
+                    bm25_count=len(bm25_chunks),
+                )
+                related_dense, related_bm25 = self._query_channels(
+                    query_text,
+                    language,
+                    dense_k=dense_k,
+                    bm25_k=bm25_k,
+                    filter_language=language,
+                    filter_doc_types=related,
+                    bm25=bm25,
+                )
+                if related_dense or related_bm25:
+                    dense_chunks, bm25_chunks = related_dense, related_bm25
+                    filter_applied = True
+                    filter_stage = "L1_related"
+
+            if should_broaden(
+                intent,
+                dense_count=len(dense_chunks),
+                bm25_count=len(bm25_chunks),
+            ):
+                logger.info(
+                    "intent_filter_fallback_broad",
+                    intent=intent.intent,
+                    dense_count=len(dense_chunks),
+                    bm25_count=len(bm25_chunks),
+                    stage="L4",
+                )
+                dense_chunks = self.vector_store.query(query_text, dense_k, language=language)
+                if bm25:
+                    bm25_hits = bm25.query(query_text, language, bm25_k)
+                    bm25_chunks = [bm25.to_retrieved_chunk(chunk, score) for chunk, score in bm25_hits]
+                filter_applied = False
+                filter_stage = "L4_broad"
+        elif apply_filter:
             logger.info(
-                "intent_filter_fallback_broad",
+                "intent_filter_kept",
                 intent=intent.intent,
                 dense_count=len(dense_chunks),
                 bm25_count=len(bm25_chunks),
+                stage=filter_stage,
             )
-            dense_chunks = self.vector_store.query(query_text, dense_k, language=language)
-            if bm25:
-                bm25_hits = bm25.query(query_text, language, bm25_k)
-                bm25_chunks = [bm25.to_retrieved_chunk(chunk, score) for chunk, score in bm25_hits]
-            filter_applied = False
 
         if not bm25 or not bm25_chunks:
             return dense_chunks[:candidate_k], filter_applied
@@ -107,22 +177,7 @@ class HybridRetriever:
         fused_chunks: list[RetrievedChunk] = []
         for chunk_id, rrf_score in sorted(fused_scores.items(), key=lambda item: item[1], reverse=True):
             source = merged[chunk_id]
-            fused_chunks.append(
-                RetrievedChunk(
-                    chunk_id=source.chunk_id,
-                    document_id=source.document_id,
-                    title=source.title,
-                    url=source.url,
-                    language=source.language,
-                    text=source.text,
-                    score=min(1.0, rrf_score * 30.0),
-                    lexical_weights=source.lexical_weights,
-                    doc_type=source.doc_type,
-                    category=source.category,
-                    is_stub=source.is_stub,
-                    canonical_url_slug=source.canonical_url_slug,
-                )
-            )
+            fused_chunks.append(replace(source, score=min(1.0, rrf_score * 30.0)))
 
         logger.info(
             "hybrid_retrieval",
@@ -130,5 +185,6 @@ class HybridRetriever:
             bm25=len(bm25_chunks),
             fused=len(fused_chunks),
             filter_applied=filter_applied,
+            filter_stage=filter_stage,
         )
         return fused_chunks[:candidate_k], filter_applied
