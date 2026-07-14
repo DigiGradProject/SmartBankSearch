@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NBE Document",
+  "type": "object",
+  "required": ["id", "title", "url", "language", "content"],
+  "properties": {
+    "id": { "type": "string" },
+    "title": { "type": "string" },
+    "url": { "type": "string", "format": "uri" },
+    "language": { "enum": ["ar", "en"] },
+    "content": { "type": "string", "minLength": 1 },
+    "metadata": { "type": "object" }
+  }
+}

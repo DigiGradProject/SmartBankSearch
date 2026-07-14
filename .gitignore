@@ -1,0 +1,77 @@
+# --- OS & editors ---
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# --- Environment & secrets ---
+.env
+.env.*
+!.env.example
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+pip-wheel-metadata/
+
+# --- Node / frontend ---
+node_modules/
+frontend/**/dist/
+frontend/**/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- ML / embeddings caches ---
+.cache/
+huggingface/
+**/.cache/huggingface/
+
+# --- Large scrape inputs (keep zip out of git) ---
+nbe_complete_scrape/
+nbe_complete_scrape.zip
+
+# --- Generated indexes & heavy runtime data ---
+nbe-ai-search-mvp/data/chroma/
+nbe-ai-search-mvp/data/bm25/
+nbe-ai-search-mvp/data/documents.json
+nbe-ai-search-mvp/data/coverage_report.json
+nbe-ai-search-mvp/data/pdfs/
+
+# --- Scrape cleaner outputs (regenerate via pipeline) ---
+nbe-scrape-cleaner/output/*.jsonl
+nbe-scrape-cleaner/output/*.json
+!nbe-scrape-cleaner/output/.gitkeep
+
+# --- Logs & temp ---
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+*.bak
+
+# --- Archives (large; regenerate locally) ---
+*.zip
+*.7z
+*.tar
+*.tar.gz

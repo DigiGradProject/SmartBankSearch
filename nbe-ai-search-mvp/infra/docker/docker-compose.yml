@@ -1,0 +1,41 @@
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.api
+    ports:
+      - "7000:7000"
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=qwen3:8b
+      - OLLAMA_MODEL_TIER2=qwen3:14b
+      - EMBEDDING_MODEL=BAAI/bge-m3
+      - RERANKER_MODEL=BAAI/bge-reranker-v2-m3
+      - CHROMA_COLLECTION=nbe_chunks_bge_m3
+      - SCRAPE_ROOT=/data/nbe_complete_scrape
+    volumes:
+      - ../../data:/app/data
+      - ../../../nbe_complete_scrape:/data/nbe_complete_scrape:ro
+    depends_on:
+      - ollama
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+  frontend:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ../../frontend/ai-search-toggle:/app
+    environment:
+      - VITE_API_BASE=http://localhost:7000
+
+volumes:
+  ollama_data:

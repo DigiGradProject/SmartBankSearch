@@ -1,0 +1,16 @@
+{"query": "أسعار العملات بما يعادل الجنيه المصري", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter", "forbidden_url_contains": "CertificatesRates"}
+{"query": "أسعار العملات", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter", "forbidden_url_contains": "CertificatesRates"}
+{"query": "سعر الصرف", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "تحويل العملات", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "exchange rates NBE", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "currency converter", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "قرض شخصي", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "personal loan NBE", "language": "en", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "بطاقات ائتمان", "language": "ar", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "credit cards NBE", "language": "en", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "الفروع", "language": "ar", "intent": "branch_locator", "expected_url_contains": "ATMBranch"}
+{"query": "الصراف الآلي", "language": "ar", "intent": "atm_locator", "expected_url_contains": "ATMBranch"}
+{"query": "شراء شهادة", "language": "ar", "intent": "certificate_buy", "expected_url_contains": "CertificatesID"}
+{"query": "كم فايده شهادة سنة بالجنيه", "language": "ar", "intent": "certificate_rate", "expected_url_contains": "CertificatesID", "forbidden_url_contains": "ExchangeRates"}
+{"query": "أسعار الشهادات بالعملة الأجنبية", "language": "ar", "intent": "certificate_rate", "expected_url_contains": "CertificatesRates", "forbidden_url_contains": "ExchangeRates"}
+{"query": "فتح حساب بنكي", "language": "ar", "intent": "account_open", "expected_url_contains": "Accounts"}

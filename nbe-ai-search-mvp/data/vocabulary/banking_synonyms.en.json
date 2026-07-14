@@ -1,0 +1,17 @@
+{
+  "exchange rate": ["currency converter", "banknote rate", "transfer rate", "usd", "egp"],
+  "currency converter": ["exchange rate", "banknote rate", "transfer rate"],
+  "certificate": ["saving certificate", "belady", "deposit certificate", "yield"],
+  "yield": ["interest rate", "certificate rate", "return"],
+  "interest rate": ["yield", "certificate rate"],
+  "personal loan": ["loan", "financing", "consumer loan"],
+  "loan": ["personal loan", "financing", "credit"],
+  "credit card": ["cards", "visa", "mastercard"],
+  "debit card": ["cards", "bank card"],
+  "branch": ["branch locator", "atm", "nearest branch"],
+  "atm": ["cash machine", "branch locator", "atm branch"],
+  "account": ["open account", "bank account", "savings account"],
+  "phone cash": ["mobile wallet", "electronic wallet"],
+  "usd": ["us dollar", "dollar", "american dollar"],
+  "eur": ["euro", "european currency"]
+}

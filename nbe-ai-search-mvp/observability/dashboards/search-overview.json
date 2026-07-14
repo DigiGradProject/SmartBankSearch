@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "panels": [
+    {
+      "title": "NBE AI Search",
+      "targets": [
+        { "expr": "nbe_search_requests_total", "legend": "requests" },
+        { "expr": "nbe_search_abstentions_total", "legend": "abstentions" }
+      ]
+    }
+  ]
+}
