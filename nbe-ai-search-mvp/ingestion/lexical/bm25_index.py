@@ -14,6 +14,7 @@ from shared.arabic_normalize import normalize_arabic
 from shared.config import settings
 from shared.logging import get_logger
 from shared.schemas import ChunkRecord
+from shared.url_canonical import canonical_url_key
 
 logger = get_logger(__name__)
 
@@ -152,6 +153,30 @@ class BM25Index:
             is_stub=chunk.is_stub,
             canonical_url_slug=chunk.canonical_url_slug,
         )
+
+    def match_urls(
+        self,
+        *needles: str,
+        language: str | None = None,
+        limit: int = 20,
+    ) -> list[IndexedChunk]:
+        """Return indexed chunks whose URL contains all needle substrings."""
+        results: list[IndexedChunk] = []
+        seen_urls: set[str] = set()
+        for chunk in self._chunks:
+            if language and chunk.language != language:
+                continue
+            url = chunk.url or ""
+            if not url or not all(needle in url for needle in needles):
+                continue
+            url_key = canonical_url_key(url)
+            if url_key in seen_urls:
+                continue
+            seen_urls.add(url_key)
+            results.append(chunk)
+            if len(results) >= limit:
+                break
+        return results
 
 
 _bm25_index: BM25Index | None = None

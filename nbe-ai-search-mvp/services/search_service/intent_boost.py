@@ -2,13 +2,26 @@
 
 from __future__ import annotations
 
+import re
+
 from ingestion.embedding.vector_store import RetrievedChunk
 from services.search_service.intent_classifier import QueryIntent
+from shared.arabic_normalize import normalize_arabic
+
+FOREIGN_CERT_RATE_HINT = re.compile(
+    r"أجنب|عملة\s*أجنب|دولار|يورو|foreign|usd|eur",
+    re.I,
+)
+LOCAL_CERT_RATE_HINT = re.compile(
+    r"جنيه|مصري|محلي|egp|local",
+    re.I,
+)
 
 INTENT_DOC_TYPE_BOOST: dict[str, dict[str, float]] = {
     "exchange_rate": {"exchange_rate": 0.25, "currency_converter": 0.25},
     "certificate_rate": {"certificate": 0.15, "certificate_rate": 0.25},
     "certificate_types": {"certificate": 0.25},
+    "card_types": {"credit_card": 0.20, "debit_card": 0.20},
     "certificate_buy": {"certificate": 0.20},
     "personal_loan": {"loan": 0.25},
     "credit_card": {"credit_card": 0.25},
@@ -29,8 +42,8 @@ INTENT_DOC_TYPE_PENALTY: dict[str, dict[str, float]] = {
 
 CANONICAL_SLUG_BOOST: dict[str, str] = {
     "exchange_rate": "ExchangeRatesAndCurrencyConverter",
-    "certificate_rate": "CertificatesRatesForeignCurrency",
     "certificate_types": "CertificatesID",
+    "card_types": "CardsID",
     "certificate_buy": "CertificatesID",
     "personal_loan": "Loans",
     "credit_card": "CreditCards",
@@ -45,17 +58,33 @@ NON_CANONICAL_SLUG_PENALTY: dict[str, tuple[str, ...]] = {
 }
 
 
+def _certificate_rate_canonical(query: str, language: str) -> str:
+    text = normalize_arabic(query) if language == "ar" else query.lower()
+    if FOREIGN_CERT_RATE_HINT.search(text):
+        return "CertificatesRatesForeignCurrency"
+    if LOCAL_CERT_RATE_HINT.search(text):
+        return "LocalCertificatesID"
+    return ""
+
+
+def _resolve_canonical(intent_name: str, query: str, language: str) -> str:
+    if intent_name == "certificate_rate":
+        return _certificate_rate_canonical(query, language)
+    return CANONICAL_SLUG_BOOST.get(intent_name, "")
+
+
 def apply_intent_scoring(
     chunks: list[RetrievedChunk],
     intent: QueryIntent,
     query: str,
+    language: str = "ar",
 ) -> list[RetrievedChunk]:
     if intent.intent == "general_faq" or not chunks:
         return chunks
 
     boosts = INTENT_DOC_TYPE_BOOST.get(intent.intent, {})
     penalties = INTENT_DOC_TYPE_PENALTY.get(intent.intent, {})
-    canonical = CANONICAL_SLUG_BOOST.get(intent.intent, "")
+    canonical = _resolve_canonical(intent.intent, query, language)
     normalized_query = query.lower()
 
     scored: list[RetrievedChunk] = []
@@ -68,6 +97,19 @@ def apply_intent_scoring(
 
         if canonical and canonical in (chunk.url or ""):
             score += 0.35
+        elif intent.intent == "certificate_rate" and canonical:
+            url = chunk.url or ""
+            if canonical == "LocalCertificatesID" and "ForigenCertificatesID" in url:
+                score -= 0.30
+            if canonical == "CertificatesRatesForeignCurrency" and "LocalCertificatesID" in url:
+                score -= 0.30
+
+        if intent.intent == "card_types" and canonical == "CardsID":
+            url = chunk.url or ""
+            if any(marker in url for marker in ("CreditCardsID", "DepitCardsID", "PrepaidCardsID")):
+                score += 0.35
+            if getattr(chunk, "is_stub", False):
+                score -= 0.20
 
         slug = getattr(chunk, "canonical_url_slug", "") or ""
         for bad_slug in NON_CANONICAL_SLUG_PENALTY.get(intent.intent, ()):

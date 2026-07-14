@@ -1,10 +1,12 @@
 import json
 import re
 from pathlib import Path
+from shared.url_canonical import canonical_url_key
 
 from bs4 import BeautifulSoup
 
 from ingestion.classification.doc_classifier import classify_document
+from ingestion.document_processing.playwright_clean import clean_playwright_content
 from shared.arabic_normalize import normalize_text
 from shared.document_quality import is_junk_document, strip_site_chrome, title_from_document
 from shared.schemas import Document, DocumentMetadata
@@ -121,6 +123,77 @@ def process_scrape_file(path: Path) -> Document | None:
             },
         ),
     )
+
+
+def _canonical_url_key(url: str) -> str:
+    return canonical_url_key(url)
+
+
+def merge_documents_by_url(base: list[Document], overrides: list[Document]) -> list[Document]:
+    """Override base documents when the same canonical URL exists in overrides."""
+    merged: dict[str, Document] = {_canonical_url_key(doc.url): doc for doc in base}
+    for doc in overrides:
+        merged[_canonical_url_key(doc.url)] = doc
+    return list(merged.values())
+
+
+def load_documents_rescrape_dir(
+    directory: Path,
+    *,
+    min_chars: int = 120,
+) -> list[Document]:
+    """Load Playwright re-scrape JSON files from scarp/output."""
+    documents: list[Document] = []
+    for path in sorted(directory.glob("*.json")):
+        with path.open(encoding="utf-8") as handle:
+            raw = json.load(handle)
+        content = clean_playwright_content((raw.get("content") or "").strip())
+        if len(content) < min_chars:
+            continue
+        meta = raw.get("metadata") or {}
+        extra = _enrich_document_metadata(
+            {
+                "url": raw.get("url") or "",
+                "title": raw.get("title") or "",
+                "language": raw.get("language") or "ar",
+                "content": content,
+                "metadata": {
+                    **meta,
+                    "source": "playwright_rescrape",
+                    "source_path": str(path),
+                },
+            }
+        )
+        extra["quality_score"] = min(1.0, float(extra.get("quality_score", 0.7)) + 0.15)
+        documents.append(
+            Document(
+                id=raw["id"],
+                title=raw.get("title") or "Untitled",
+                url=raw["url"],
+                language=raw["language"],
+                content=content,
+                metadata=DocumentMetadata(
+                    path=str(path),
+                    source_folder="playwright_rescrape",
+                    extra=extra,
+                ),
+            )
+        )
+    return documents
+
+
+def load_merged_corpus(project_root: Path, limit: int | None = None) -> list[Document]:
+    """Base cleaned JSONL + Playwright rescrape overrides + product stubs."""
+    from shared.config import settings
+
+    documents = load_documents_jsonl(settings.cleaned_jsonl_path, limit=None)
+    if settings.rescrape_json_path.exists():
+        rescrape_docs = load_documents_rescrape_dir(settings.rescrape_json_path)
+        documents = merge_documents_by_url(documents, rescrape_docs)
+    documents.extend(load_product_stubs(project_root))
+    if limit:
+        documents = documents[:limit]
+    return documents
 
 
 def load_documents_from_scrape(scrape_root: Path, limit: int | None = None) -> list[Document]:

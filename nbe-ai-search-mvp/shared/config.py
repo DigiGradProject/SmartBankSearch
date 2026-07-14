@@ -9,10 +9,11 @@ class Settings(BaseSettings):
     project_root: Path = Path(__file__).resolve().parents[1]
     documents_path: Path = project_root / "data" / "documents.json"
     cleaned_jsonl_path: Path = project_root.parent / "nbe-scrape-cleaner" / "output" / "documents.jsonl"
+    rescrape_json_path: Path = project_root.parent / "output"
     scrape_root: Path = project_root.parent / "nbe_complete_scrape"
     chroma_path: Path = project_root / "data" / "chroma"
-    # New collection for BGE-M3 (1024-d). Do not mix with MiniLM vectors.
-    chroma_collection: str = "nbe_chunks_bge_m3_v2"
+    # Bump when corpus schema/content changes materially.
+    chroma_collection: str = "nbe_chunks_bge_m3_v3"
     intent_filter_confidence: float = 0.75
     intent_filter_enabled: bool = True
 

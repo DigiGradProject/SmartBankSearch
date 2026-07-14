@@ -11,6 +11,7 @@
 {"query": "الفروع", "language": "ar", "intent": "branch_locator", "expected_url_contains": "ATMBranch"}
 {"query": "الصراف الآلي", "language": "ar", "intent": "atm_locator", "expected_url_contains": "ATMBranch"}
 {"query": "شراء شهادة", "language": "ar", "intent": "certificate_buy", "expected_url_contains": "CertificatesID"}
-{"query": "كم فايده شهادة سنة بالجنيه", "language": "ar", "intent": "certificate_rate", "expected_url_contains": "CertificatesID", "forbidden_url_contains": "ExchangeRates"}
-{"query": "أسعار الشهادات بالعملة الأجنبية", "language": "ar", "intent": "certificate_rate", "expected_url_contains": "CertificatesRates", "forbidden_url_contains": "ExchangeRates"}
+{"query": "كم فايده شهادة سنة بالجنيه", "language": "ar", "intent": "certificate_rate", "expected_url_contains": "LocalCertificatesID", "forbidden_url_contains": "ExchangeRates"}
+{"query": "أسعار الشهادات بالعملة الأجنبية", "language": "ar", "intent": "certificate_rate", "expected_url_contains": "ForigenCertificatesID", "forbidden_url_contains": "ExchangeRates"}
 {"query": "فتح حساب بنكي", "language": "ar", "intent": "account_open", "expected_url_contains": "Accounts"}
+{"query": "انواع البطاقات البنكيه", "language": "ar", "intent": "card_types"}

@@ -6,6 +6,7 @@ from ingestion.document_processing.processor import (
     load_documents_from_scrape,
     load_documents_json,
     load_documents_jsonl,
+    load_merged_corpus,
     load_product_stubs,
 )
 from ingestion.embedding.vector_store import VectorStore
@@ -37,6 +38,8 @@ def run_ingestion(source: str = "documents_json", limit: int | None = None) -> I
                 raise FileNotFoundError(f"Cleaned JSONL not found: {settings.cleaned_jsonl_path}")
             documents = load_documents_jsonl(settings.cleaned_jsonl_path, limit=limit)
             documents.extend(load_product_stubs(settings.project_root))
+        elif source == "merged":
+            documents = load_merged_corpus(settings.project_root, limit=limit)
         else:
             if not settings.documents_path.exists():
                 documents = load_documents_from_scrape(settings.scrape_root, limit=limit)

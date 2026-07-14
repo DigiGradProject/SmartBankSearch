@@ -8,10 +8,19 @@ from typing import Any
 from services.context_builder.builder import ContextBuilder
 from services.llm_service.llm import LLMService
 from services.search_service.suggestions import build_suggestions
+from services.search_service.card_catalog import (
+    build_card_citations,
+    build_card_types_answer,
+    build_credit_cards_answer,
+    is_card_types_query,
+    is_credit_cards_overview_query,
+    prioritize_credit_card_chunks,
+)
 from services.search_service.certificate_catalog import (
     build_certificate_types_answer,
     is_certificate_types_query,
 )
+from services.search_service.product_detail import try_product_detail_answer
 from services.search_service.rate_guidance import (
     context_has_applicable_rate,
     is_rate_query,
@@ -21,7 +30,7 @@ from services.search_service.rate_guidance import (
 )
 from services.search_service.search import SearchService
 from shared.logging import get_logger
-from shared.schemas import SearchResponse
+from shared.schemas import Citation, SearchResponse
 
 logger = get_logger(__name__)
 
@@ -68,6 +77,52 @@ class Orchestrator:
         retrieval = self.search_service.retrieve(query, language)
         suggestions = build_suggestions(retrieval.query, retrieval.language, retrieval.chunks)
 
+        if is_certificate_types_query(retrieval.query, retrieval.language):
+            catalog_answer = build_certificate_types_answer(retrieval.chunks, retrieval.language)
+            if catalog_answer:
+                built = self.context_builder.build(retrieval.query, retrieval.chunks)
+                return SearchResponse(
+                    answer=catalog_answer,
+                    confidence=round(max(0.72, retrieval.confidence * 0.85), 3),
+                    citations=built.citations,
+                    answered=True,
+                    language=retrieval.language,  # type: ignore[arg-type]
+                    suggestions=suggestions,
+                )
+
+        if is_card_types_query(retrieval.query, retrieval.language):
+            card_answer = build_card_types_answer(retrieval.chunks, retrieval.language)
+            if card_answer:
+                citation_pool = retrieval.citation_chunks or retrieval.chunks
+                citations = build_card_citations(citation_pool, max_items=5, language=retrieval.language)
+                return SearchResponse(
+                    answer=card_answer,
+                    confidence=round(max(0.75, retrieval.confidence * 0.88), 3),
+                    citations=citations,
+                    answered=True,
+                    language=retrieval.language,  # type: ignore[arg-type]
+                    suggestions=suggestions,
+                )
+
+        if is_credit_cards_overview_query(retrieval.query, retrieval.language):
+            credit_answer = build_credit_cards_answer(retrieval.chunks, retrieval.language)
+            if credit_answer:
+                citation_pool = retrieval.citation_chunks or retrieval.chunks
+                citations = build_card_citations(
+                    citation_pool,
+                    max_items=5,
+                    include_families=("credit",),
+                    language=retrieval.language,
+                )
+                return SearchResponse(
+                    answer=credit_answer,
+                    confidence=round(max(0.78, retrieval.confidence * 0.9), 3),
+                    citations=citations,
+                    answered=True,
+                    language=retrieval.language,  # type: ignore[arg-type]
+                    suggestions=suggestions,
+                )
+
         if not retrieval.should_answer:
             response = SearchResponse(
                 answer=None,
@@ -104,18 +159,21 @@ class Orchestrator:
                 ),
             )
 
-        # Certificate catalog questions: answer from indexed product stubs/pages directly.
-        if is_certificate_types_query(retrieval.query, retrieval.language):
-            catalog_answer = build_certificate_types_answer(retrieval.chunks, retrieval.language)
-            if catalog_answer:
-                return SearchResponse(
-                    answer=catalog_answer,
-                    confidence=round(max(0.72, retrieval.confidence * 0.85), 3),
-                    citations=built.citations,
-                    answered=True,
-                    language=retrieval.language,  # type: ignore[arg-type]
-                    suggestions=suggestions,
-                )
+        # Named product pages (e.g. شهادة استثمار 'أ'): extract fields from product detail chunk.
+        product_detail = try_product_detail_answer(
+            retrieval.query, retrieval.language, retrieval.chunks
+        )
+        if product_detail:
+            answer, source_chunk = product_detail
+            citations = [Citation(title=source_chunk.title, url=source_chunk.url)] if source_chunk.url else built.citations
+            return SearchResponse(
+                answer=answer,
+                confidence=round(max(0.78, retrieval.confidence * 0.9), 3),
+                citations=citations,
+                answered=True,
+                language=retrieval.language,  # type: ignore[arg-type]
+                suggestions=suggestions,
+            )
 
         # Yield/rate questions: only use LLM when evidence contains an applicable numeric rate.
         if is_rate_query(retrieval.query, retrieval.language) and not context_has_applicable_rate(

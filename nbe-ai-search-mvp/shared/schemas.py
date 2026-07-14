@@ -83,7 +83,7 @@ class HealthResponse(BaseModel):
 
 
 class IngestRequest(BaseModel):
-    source: Literal["documents_json", "scrape", "cleaned_jsonl"] = "cleaned_jsonl"
+    source: Literal["documents_json", "scrape", "cleaned_jsonl", "merged"] = "merged"
     limit: int | None = None
 
 

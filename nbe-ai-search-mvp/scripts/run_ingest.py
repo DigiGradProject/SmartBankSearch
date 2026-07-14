@@ -16,8 +16,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run NBE AI Search ingestion")
     parser.add_argument(
         "--source",
-        choices=["documents_json", "scrape", "cleaned_jsonl"],
-        default="cleaned_jsonl",
+        choices=["documents_json", "scrape", "cleaned_jsonl", "merged"],
+        default="merged",
     )
     parser.add_argument("--limit", type=int, default=None)
     args = parser.parse_args()

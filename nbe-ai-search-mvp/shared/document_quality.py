@@ -19,6 +19,23 @@ BROKEN_CITATION_URL_PATTERN = re.compile(
     r"(?i)ProductDetails.*(Belady%20USD|Belady USD|beladyoneyear|beladythreeyears|beladyfiveyears)",
 )
 
+OFFICIAL_CATEGORY_IDS = (
+    "CreditCardsID",
+    "DepitCardsID",
+    "PrepaidCardsID",
+    "LocalCertificatesID",
+    "ForigenCertificatesID",
+    "CertificatesRatesForeignCurrency",
+    "CardsID",
+)
+
+
+def is_official_product_category_url(url: str) -> bool:
+    """NBE SPA category listings are menu-like but are valid citation/retrieval sources."""
+    if "ProductCategory" not in url:
+        return False
+    return any(category_id in url for category_id in OFFICIAL_CATEGORY_IDS)
+
 
 def is_junk_document(doc_id: str) -> bool:
     return bool(JUNK_DOC_PATTERN.search(doc_id))

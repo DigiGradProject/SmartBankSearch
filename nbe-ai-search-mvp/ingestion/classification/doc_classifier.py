@@ -33,6 +33,19 @@ URL_SLUG_MAP: dict[str, tuple[str, str]] = {
 # ProductCategory CategoryID hints
 CATEGORY_ID_MAP: dict[str, tuple[str, str]] = {
     "certificatesid": ("certificate", "certificates"),
+    "localcertificatesid": ("certificate_rate", "certificates"),
+    "forigencertificatesid": ("certificate", "certificates"),
+    "investmentcertificatecatid": ("certificate", "certificates"),
+    "creditcardsid": ("credit_card", "cards"),
+    "depitcardsid": ("debit_card", "cards"),
+    "prepaidcardsid": ("debit_card", "cards"),
+    "cardsid": ("credit_card", "cards"),
+    "accountsid": ("account", "accounts"),
+    "currentaccountsid": ("account", "accounts"),
+    "savinglocalaccountsid": ("account", "accounts"),
+    "savingforeignaccountsid": ("account", "accounts"),
+    "saving accounts": ("account", "accounts"),
+    "openyourbankaccountinegypt": ("account", "accounts"),
     "beladycertificateid": ("certificate", "certificates"),
     "beladyoneyear": ("certificate", "certificates"),
     "beladythreeyears": ("certificate", "certificates"),
@@ -122,10 +135,10 @@ def classify_document(
         )
 
     doc_type, category = "general", "general"
-    if slug in URL_SLUG_MAP:
-        doc_type, category = URL_SLUG_MAP[slug]
-    elif category_id and category_id in CATEGORY_ID_MAP:
+    if category_id and category_id in CATEGORY_ID_MAP:
         doc_type, category = CATEGORY_ID_MAP[category_id]
+    elif slug in URL_SLUG_MAP:
+        doc_type, category = URL_SLUG_MAP[slug]
 
     title_text = f"{title} {slug.replace('_', ' ')}"
     for pattern, dt, cat in TITLE_KEYWORDS:

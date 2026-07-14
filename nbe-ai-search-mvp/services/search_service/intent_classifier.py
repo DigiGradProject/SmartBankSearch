@@ -16,6 +16,7 @@ INTENT_DOC_TYPES: dict[str, tuple[str, ...]] = {
     "personal_loan": ("loan",),
     "credit_card": ("credit_card",),
     "debit_card": ("debit_card",),
+    "card_types": ("credit_card", "debit_card"),
     "branch_locator": ("branch",),
     "atm_locator": ("branch", "atm"),
     "account_open": ("account",),
@@ -134,6 +135,24 @@ INTENT_RULES: list[IntentRule] = [
         patterns_en=(_en(r"personal\s*loan"),),
         expand_ar="قرض شخصي تمويل Loans",
         expand_en="personal loan financing",
+    ),
+    IntentRule(
+        intent="card_types",
+        category="cards",
+        patterns_ar=(
+            _ar(r"انواع?\s*(ال)?بطاق"),
+            _ar(r"انواع?\s*البطاقات\s*البنكيه"),
+            _ar(r"ما\s*هي\s*(ال)?بطاق"),
+            _ar(r"قائمة\s*البطاقات"),
+            _ar(r"انواع?\s*كروت"),
+        ),
+        patterns_en=(
+            _en(r"types?\s+of\s+(bank\s+)?cards?"),
+            _en(r"card\s+types?"),
+        ),
+        expand_ar="بطاقات ائتمان خصم مباشر مدفوعة مقدما CreditCards DepitCards PrepaidCards",
+        expand_en="credit debit prepaid cards NBE",
+        confidence=0.93,
     ),
     IntentRule(
         intent="credit_card",

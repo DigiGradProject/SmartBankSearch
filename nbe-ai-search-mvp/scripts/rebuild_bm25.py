@@ -10,21 +10,21 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from ingestion.chunking.chunker import chunk_document  # noqa: E402
-from ingestion.document_processing.processor import (  # noqa: E402
-    load_documents_jsonl,
-    load_product_stubs,
-)
+from ingestion.document_processing.processor import load_merged_corpus
 from ingestion.lexical.bm25_index import rebuild_bm25_index  # noqa: E402
 from shared.config import settings  # noqa: E402
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Rebuild BM25 lexical index")
-    parser.add_argument("--source", choices=["cleaned_jsonl"], default="cleaned_jsonl")
+    parser.add_argument("--source", choices=["cleaned_jsonl", "merged"], default="merged")
     parser.add_argument("--limit", type=int, default=None)
     args = parser.parse_args()
 
-    if args.source == "cleaned_jsonl":
+    if args.source == "merged":
+        documents = load_merged_corpus(settings.project_root, limit=args.limit)
+    else:
+        from ingestion.document_processing.processor import load_documents_jsonl, load_product_stubs
         documents = load_documents_jsonl(settings.cleaned_jsonl_path, limit=args.limit)
         documents.extend(load_product_stubs(settings.project_root))
 

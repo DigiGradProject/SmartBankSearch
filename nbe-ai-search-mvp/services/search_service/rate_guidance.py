@@ -8,6 +8,9 @@ from shared.arabic_normalize import normalize_arabic
 from shared.schemas import Citation, SearchSuggestion
 
 LOCAL_CERTIFICATES_URL = (
+    'https://www.nbe.com.eg/NBE/E/#/AR/ProductCategory?inParams={"CategoryID":"LocalCertificatesID"}'
+)
+LOCAL_CERTIFICATES_LEGACY_URL = (
     'https://www.nbe.com.eg/NBE/E/#/AR/ProductCategory?inParams={"CategoryID":"CertificatesID"}'
 )
 LOCAL_DEPOSIT_RATES_URL = "https://www.nbe.com.eg/NBE/E/#/AR/Depositrateslocalcurrency"
@@ -22,7 +25,8 @@ RATE_INTENT_AR = re.compile(
 )
 EGP_HINT = re.compile(r"(جنيه|مصري|محلي|محلية|سنه|سنة|واحد)", re.IGNORECASE)
 LOCAL_RATE_CONTEXT = re.compile(
-    r"(جنيه\s*مصري|العملة\s*المحلية|الودائع\s*بالجنيه|شهاد.*محل|محلي.*شهاد|deposit.*local|local\s*currency)",
+    r"(جنيه\s*مصري|العملة\s*المحلية|الودائع\s*بالجنيه|شهاد.*محل|محلي.*شهاد|"
+    r"localcertificatesid|الشهادة\s*البلاتينية|الشهادة\s*الخماسية|شهادة\s*امان|deposit.*local|local\s*currency)",
     re.IGNORECASE,
 )
 RATE_IN_CONTEXT = re.compile(r"\d+(?:[.,]\d+)?\s*[٪%]")
@@ -96,7 +100,7 @@ def rate_suggestions(query: str, language: str) -> list[SearchSuggestion]:
         items = [
             SearchSuggestion(
                 query="شهادات الادخار بالعملة المحلية",
-                label="شهادات الادخار بالعملة المحلية",
+                label="شهادات الادخار بالعملة المحلية (أسعار العائد)",
                 url=LOCAL_CERTIFICATES_URL,
                 reason="official_page",
                 score=1.0,
