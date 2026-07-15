@@ -36,7 +36,7 @@ python scripts/export_documents.py --limit 50
 
 ```bash
 set PYTHONPATH=.
-python scripts/run_ingest.py --source scrape --limit 30
+python scripts\run_ingest.py --source merged
 ```
 
 First run downloads **BGE-M3** and (on first search) **bge-reranker-v2-m3**.
