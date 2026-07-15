@@ -1,0 +1,220 @@
+{"query": "كام سعر الدولار النهاردة في الأهلي؟", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter", "forbidden_url_contains": "CertificatesRates"}
+{"query": "ايه سعر اليورو مقابل الجنيه عندكم؟", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter", "forbidden_url_contains": "CertificatesRates"}
+{"query": "محتاج جدول أسعار العملات الأجنبية", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "عايز اعرف قيمة الجنيه قصاد الدولار", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "قولي سعر شراء وبيع الدولار البنكي", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "what is the USD to EGP buying price today", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "NBE forex board for EUR", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "show me today's banknote FX table", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "how many pounds for one dollar at NBE", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "current USD sell rate please", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "بكام الاسترليني النهاردة؟", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "عايز محول من دولار لجنيه", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "FX rates for tourists in EGP", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "الأهلي بيعالجنيه كام دولار", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "need live currency board NBE", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "عايز أقساط تمويل شخصي بدون ضامن", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans", "forbidden_url_contains": "NewsCat"}
+{"query": "قد ايه تمويل فردي من البنك؟", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "شروط أخذ قرض لأغراض شخصية", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "محتاج تمويل للسفر أو الجواز", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "نسبة الفائدة على التمويل الشخصي", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "apply for an unsecured personal financing product", "language": "en", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "NBE retail loan installments explained", "language": "en", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "how to get consumer financing from NBE", "language": "en", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "personal financing eligibility documents", "language": "en", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "خواص القروض الفردية المتاحة", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "عايز كارت ائتمان بمكافآت سفر", "language": "ar", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "ما هي بطاقات الشراء بالتقسيط؟", "language": "ar", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "قارن بين بطاقات الكريدت عندكم", "language": "ar", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "نسبة الفوائد على الكريديت كارد", "language": "ar", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "which revolving credit cards does NBE offer", "language": "en", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "visa platinum rewards card details", "language": "en", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "list of plastic payment products", "language": "en", "intent": "card_types", "expected_url_contains": "Cards"}
+{"query": "ايه أنواع الكروت البنكية عند الأهلي", "language": "ar", "intent": "card_types", "expected_url_contains": "Cards"}
+{"query": "بطاقة خصم مباشر ولا ائتمان؟", "language": "ar", "intent": "card_types", "expected_url_contains": "Cards"}
+{"query": "debit versus credit plastic options", "language": "en", "intent": "card_types", "expected_url_contains": "Cards"}
+{"query": "كام عائد ادخار لمدة 12 شهر بالجنيه", "language": "ar", "intent": "certificate_rate", "expected_url_contains": "LocalCertificatesID", "forbidden_url_contains": "ExchangeRates"}
+{"query": "فايدة شهادات الدولار السنوية", "language": "ar", "intent": "certificate_rate", "expected_url_contains": "ForigenCertificatesID", "forbidden_url_contains": "ExchangeRates"}
+{"query": "interest on USD saving instruments", "language": "en", "intent": "certificate_rate", "expected_url_contains": "ForigenCertificatesID", "forbidden_url_contains": "ExchangeRates"}
+{"query": "EGP one-year deposit yield table", "language": "en", "intent": "certificate_rate", "expected_url_contains": "LocalCertificatesID", "forbidden_url_contains": "ExchangeRates"}
+{"query": "عايز أشتري أداة ادخار جديدة", "language": "ar", "intent": "certificate_buy", "expected_url_contains": "CertificatesID"}
+{"query": "how do I purchase a savings certificate", "language": "en", "intent": "certificate_buy", "expected_url_contains": "CertificatesID"}
+{"query": "اعرض لي أصناف أدوات الادخار", "language": "ar", "intent": "certificate_types", "expected_url_contains": "CertificatesID"}
+{"query": "catalog of NBE savings certificates", "language": "en", "intent": "certificate_types", "expected_url_contains": "CertificatesID"}
+{"query": "شهادات لأجل ثلاث سنوات متاحة؟", "language": "ar", "intent": "certificate_types", "expected_url_contains": "CertificatesID"}
+{"query": "compare fixed-income deposit products", "language": "en", "intent": "certificate_types", "expected_url_contains": "CertificatesID"}
+{"query": "إزاي أبدأ حساب جديد في الفرع؟", "language": "ar", "intent": "account_open", "expected_url_contains": "Accounts", "forbidden_url_contains": "OpenYourBankAccountInEgypt"}
+{"query": "المستندات اللازمة لعمل حساب جاري", "language": "ar", "intent": "account_open", "expected_url_contains": "CurrentAccountsID", "forbidden_url_contains": "OpenYourBankAccountInEgypt"}
+{"query": "عايز حساب توفير عادي للمقيمين", "language": "ar", "intent": "account_open", "expected_url_contains": "Accounts", "forbidden_url_contains": "OpenYourBankAccountInEgypt"}
+{"query": "steps to open a resident current account", "language": "en", "intent": "account_open", "expected_url_contains": "CurrentAccountsID", "forbidden_url_contains": "OpenYourBankAccountInEgypt"}
+{"query": "documents required for a local savings account", "language": "en", "intent": "account_open", "expected_url_contains": "Accounts"}
+{"query": "فتح حساب للمصريين جوه مصر", "language": "ar", "intent": "account_open", "expected_url_contains": "CurrentAccountsID", "forbidden_url_contains": "OpenYourBankAccountInEgypt"}
+{"query": "أقرب فرع ليا فين؟", "language": "ar", "intent": "branch_locator", "expected_url_contains": "ATMBranch"}
+{"query": "فين ألقى صراف قريب مني", "language": "ar", "intent": "atm_locator", "expected_url_contains": "ATMBranch"}
+{"query": "locate nearest NBE branch on the map", "language": "en", "intent": "branch_locator", "expected_url_contains": "ATMBranch"}
+{"query": "where can I withdraw from an NBE cash machine", "language": "en", "intent": "atm_locator", "expected_url_contains": "ATMBranch"}
+{"query": "عناوين فروع الإسكندرية", "language": "ar", "intent": "branch_locator", "expected_url_contains": "ATMBranch"}
+{"query": "في خصومات أو برومو حالية؟", "language": "ar", "intent": "offers", "expected_url_contains": ""}
+{"query": "current promotional campaigns", "language": "en", "intent": "offers", "expected_url_contains": ""}
+{"query": "اسألوني عن الحاجات المتكررة", "language": "ar", "intent": "faq", "expected_url_contains": ""}
+{"query": "common customer questions hub", "language": "en", "intent": "faq", "expected_url_contains": ""}
+{"query": "حلول بنكية للشركات الكبيرة", "language": "ar", "intent": "corporate", "expected_url_contains": ""}
+{"query": "banking solutions for large enterprises", "language": "en", "intent": "corporate", "expected_url_contains": ""}
+{"query": "تمويل أصحاب الورش الصغيرة", "language": "ar", "intent": "sme", "expected_url_contains": ""}
+{"query": "financing for small workshops", "language": "en", "intent": "sme", "expected_url_contains": ""}
+{"query": "محفظة الموبايل للدفع", "language": "ar", "intent": "wallet", "expected_url_contains": ""}
+{"query": "mobile wallet cash-out options", "language": "en", "intent": "wallet", "expected_url_contains": ""}
+{"query": "محتاج أعرف تسعير العملة الأجنبية اليوم", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter", "forbidden_url_contains": "CertificatesRates"}
+{"query": "عايز شاشة أسعار البيع والشراء للنقد الأجنبي", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter", "forbidden_url_contains": "CertificatesRates"}
+{"query": "بكم يبيع البنك ورقة الدولار", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter", "forbidden_url_contains": "CertificatesRates"}
+{"query": "عرض أسعار الحوالات والعملات الورقية", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter", "forbidden_url_contains": "CertificatesRates"}
+{"query": "اللوحة اليومية لتقييم العملات", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter", "forbidden_url_contains": "CertificatesRates"}
+{"query": "publisher of daily FX quotes for customers", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "tell me the mid-market vs bank cash rate", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "Egyptian pound versus dollar bank table", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "NBE foreign exchange ticker for clients", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "retail banknote conversion prices", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "تمويل أفراد بدون رهن عقاري", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans", "forbidden_url_contains": "NewsCat"}
+{"query": "قسط شهري مناسب لموظف حكومي", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans", "forbidden_url_contains": "NewsCat"}
+{"query": "حد الائتمان الشخصي المسموح", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans", "forbidden_url_contains": "NewsCat"}
+{"query": "عروض التقسيط الاستهلاكي", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans", "forbidden_url_contains": "NewsCat"}
+{"query": "payroll-linked consumer financing", "language": "en", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "unsecured retail loan brochure", "language": "en", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "monthly installment loan calculator info", "language": "en", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "كارت بمزايا تأمين سفر", "language": "ar", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "بطاقة تسوق أونلاين مؤمنة", "language": "ar", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "كريدت بحدود مرتفعة", "language": "ar", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "secure ecommerce revolving card", "language": "en", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "travel benefits credit plastic", "language": "en", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "عائد شهادة الادخار المحلية سنة", "language": "ar", "intent": "certificate_rate", "expected_url_contains": "LocalCertificatesID", "forbidden_url_contains": "ExchangeRates"}
+{"query": "فايدة أدوات الإيداع بالعملة الصعبة", "language": "ar", "intent": "certificate_rate", "expected_url_contains": "ForigenCertificatesID", "forbidden_url_contains": "ExchangeRates"}
+{"query": "جدول أرباح شهادات الجنيه", "language": "ar", "intent": "certificate_rate", "expected_url_contains": "LocalCertificatesID", "forbidden_url_contains": "ExchangeRates"}
+{"query": "local currency deposit coupon rates", "language": "en", "intent": "certificate_rate", "expected_url_contains": "LocalCertificatesID", "forbidden_url_contains": "ExchangeRates"}
+{"query": "foreign currency certificate APR sheet", "language": "en", "intent": "certificate_rate", "expected_url_contains": "ForigenCertificatesID", "forbidden_url_contains": "ExchangeRates"}
+{"query": "إجراءات بدء علاقة حسابية جديدة", "language": "ar", "intent": "account_open", "expected_url_contains": "Accounts", "forbidden_url_contains": "OpenYourBankAccountInEgypt"}
+{"query": "الأوراق لفتح حساب توفير للمقيم", "language": "ar", "intent": "account_open", "expected_url_contains": "Accounts", "forbidden_url_contains": "OpenYourBankAccountInEgypt"}
+{"query": "حساب جاري برواتب محولة", "language": "ar", "intent": "account_open", "expected_url_contains": "Accounts", "forbidden_url_contains": "OpenYourBankAccountInEgypt"}
+{"query": "resident retail account onboarding checklist", "language": "en", "intent": "account_open", "expected_url_contains": "Accounts", "forbidden_url_contains": "OpenYourBankAccountInEgypt"}
+{"query": "open an EGP transactional account", "language": "en", "intent": "account_open", "expected_url_contains": "Accounts", "forbidden_url_contains": "OpenYourBankAccountInEgypt"}
+{"query": "ممكن توضح كام سعر الدولار النهاردة في الأهلي؟", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter", "forbidden_url_contains": "CertificatesRates"}
+{"query": "لو سمحت كام سعر الدولار النهاردة في الأهلي؟", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter", "forbidden_url_contains": "CertificatesRates"}
+{"query": "محتاج معلومة عن كام سعر الدولار النهاردة في الأهلي؟", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter", "forbidden_url_contains": "CertificatesRates"}
+{"query": "أسئلة عن كام سعر الدولار النهاردة في الأهلي؟", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter", "forbidden_url_contains": "CertificatesRates"}
+{"query": "ممكن توضح ايه سعر اليورو مقابل الجنيه عندكم؟", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter", "forbidden_url_contains": "CertificatesRates"}
+{"query": "لو سمحت ايه سعر اليورو مقابل الجنيه عندكم؟", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter", "forbidden_url_contains": "CertificatesRates"}
+{"query": "محتاج معلومة عن ايه سعر اليورو مقابل الجنيه عندكم؟", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter", "forbidden_url_contains": "CertificatesRates"}
+{"query": "أسئلة عن ايه سعر اليورو مقابل الجنيه عندكم؟", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter", "forbidden_url_contains": "CertificatesRates"}
+{"query": "ممكن توضح محتاج جدول أسعار العملات الأجنبية", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "لو سمحت محتاج جدول أسعار العملات الأجنبية", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "محتاج معلومة عن محتاج جدول أسعار العملات الأجنبية", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "أسئلة عن محتاج جدول أسعار العملات الأجنبية", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "ممكن توضح عايز اعرف قيمة الجنيه قصاد الدولار", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "لو سمحت عايز اعرف قيمة الجنيه قصاد الدولار", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "محتاج معلومة عن عايز اعرف قيمة الجنيه قصاد الدولار", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "أسئلة عن عايز اعرف قيمة الجنيه قصاد الدولار", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "ممكن توضح قولي سعر شراء وبيع الدولار البنكي", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "لو سمحت قولي سعر شراء وبيع الدولار البنكي", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "محتاج معلومة عن قولي سعر شراء وبيع الدولار البنكي", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "أسئلة عن قولي سعر شراء وبيع الدولار البنكي", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "please explain what is the USD to EGP buying price today", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "could you clarify what is the USD to EGP buying price today", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "looking for info on what is the USD to EGP buying price today", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "customer question about what is the USD to EGP buying price today", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "please explain NBE forex board for EUR", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "could you clarify NBE forex board for EUR", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "looking for info on NBE forex board for EUR", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "customer question about NBE forex board for EUR", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "please explain show me today's banknote FX table", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "could you clarify show me today's banknote FX table", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "looking for info on show me today's banknote FX table", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "customer question about show me today's banknote FX table", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "please explain how many pounds for one dollar at NBE", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "could you clarify how many pounds for one dollar at NBE", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "looking for info on how many pounds for one dollar at NBE", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "customer question about how many pounds for one dollar at NBE", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "please explain current USD sell rate please", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "could you clarify current USD sell rate please", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "looking for info on current USD sell rate please", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "customer question about current USD sell rate please", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "ممكن توضح بكام الاسترليني النهاردة؟", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "لو سمحت بكام الاسترليني النهاردة؟", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "محتاج معلومة عن بكام الاسترليني النهاردة؟", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "أسئلة عن بكام الاسترليني النهاردة؟", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "ممكن توضح عايز محول من دولار لجنيه", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "لو سمحت عايز محول من دولار لجنيه", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "محتاج معلومة عن عايز محول من دولار لجنيه", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "أسئلة عن عايز محول من دولار لجنيه", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "please explain FX rates for tourists in EGP", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "could you clarify FX rates for tourists in EGP", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "looking for info on FX rates for tourists in EGP", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "customer question about FX rates for tourists in EGP", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "ممكن توضح الأهلي بيعالجنيه كام دولار", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "لو سمحت الأهلي بيعالجنيه كام دولار", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "محتاج معلومة عن الأهلي بيعالجنيه كام دولار", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "أسئلة عن الأهلي بيعالجنيه كام دولار", "language": "ar", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "please explain need live currency board NBE", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "could you clarify need live currency board NBE", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "looking for info on need live currency board NBE", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "customer question about need live currency board NBE", "language": "en", "intent": "exchange_rate", "expected_url_contains": "ExchangeRatesAndCurrencyConverter"}
+{"query": "ممكن توضح عايز أقساط تمويل شخصي بدون ضامن", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans", "forbidden_url_contains": "NewsCat"}
+{"query": "لو سمحت عايز أقساط تمويل شخصي بدون ضامن", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans", "forbidden_url_contains": "NewsCat"}
+{"query": "محتاج معلومة عن عايز أقساط تمويل شخصي بدون ضامن", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans", "forbidden_url_contains": "NewsCat"}
+{"query": "أسئلة عن عايز أقساط تمويل شخصي بدون ضامن", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans", "forbidden_url_contains": "NewsCat"}
+{"query": "ممكن توضح قد ايه تمويل فردي من البنك؟", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "لو سمحت قد ايه تمويل فردي من البنك؟", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "محتاج معلومة عن قد ايه تمويل فردي من البنك؟", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "أسئلة عن قد ايه تمويل فردي من البنك؟", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "ممكن توضح شروط أخذ قرض لأغراض شخصية", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "لو سمحت شروط أخذ قرض لأغراض شخصية", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "محتاج معلومة عن شروط أخذ قرض لأغراض شخصية", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "أسئلة عن شروط أخذ قرض لأغراض شخصية", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "ممكن توضح محتاج تمويل للسفر أو الجواز", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "لو سمحت محتاج تمويل للسفر أو الجواز", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "محتاج معلومة عن محتاج تمويل للسفر أو الجواز", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "أسئلة عن محتاج تمويل للسفر أو الجواز", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "ممكن توضح نسبة الفائدة على التمويل الشخصي", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "لو سمحت نسبة الفائدة على التمويل الشخصي", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "محتاج معلومة عن نسبة الفائدة على التمويل الشخصي", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "أسئلة عن نسبة الفائدة على التمويل الشخصي", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "please explain apply for an unsecured personal financing product", "language": "en", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "could you clarify apply for an unsecured personal financing product", "language": "en", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "looking for info on apply for an unsecured personal financing product", "language": "en", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "customer question about apply for an unsecured personal financing product", "language": "en", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "please explain NBE retail loan installments explained", "language": "en", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "could you clarify NBE retail loan installments explained", "language": "en", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "looking for info on NBE retail loan installments explained", "language": "en", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "customer question about NBE retail loan installments explained", "language": "en", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "please explain how to get consumer financing from NBE", "language": "en", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "could you clarify how to get consumer financing from NBE", "language": "en", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "looking for info on how to get consumer financing from NBE", "language": "en", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "customer question about how to get consumer financing from NBE", "language": "en", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "please explain personal financing eligibility documents", "language": "en", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "could you clarify personal financing eligibility documents", "language": "en", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "looking for info on personal financing eligibility documents", "language": "en", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "customer question about personal financing eligibility documents", "language": "en", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "ممكن توضح خواص القروض الفردية المتاحة", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "لو سمحت خواص القروض الفردية المتاحة", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "محتاج معلومة عن خواص القروض الفردية المتاحة", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "أسئلة عن خواص القروض الفردية المتاحة", "language": "ar", "intent": "personal_loan", "expected_url_contains": "Loans"}
+{"query": "ممكن توضح عايز كارت ائتمان بمكافآت سفر", "language": "ar", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "لو سمحت عايز كارت ائتمان بمكافآت سفر", "language": "ar", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "محتاج معلومة عن عايز كارت ائتمان بمكافآت سفر", "language": "ar", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "أسئلة عن عايز كارت ائتمان بمكافآت سفر", "language": "ar", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "ممكن توضح ما هي بطاقات الشراء بالتقسيط؟", "language": "ar", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "لو سمحت ما هي بطاقات الشراء بالتقسيط؟", "language": "ar", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "محتاج معلومة عن ما هي بطاقات الشراء بالتقسيط؟", "language": "ar", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "أسئلة عن ما هي بطاقات الشراء بالتقسيط؟", "language": "ar", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "ممكن توضح قارن بين بطاقات الكريدت عندكم", "language": "ar", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "لو سمحت قارن بين بطاقات الكريدت عندكم", "language": "ar", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "محتاج معلومة عن قارن بين بطاقات الكريدت عندكم", "language": "ar", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "أسئلة عن قارن بين بطاقات الكريدت عندكم", "language": "ar", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "ممكن توضح نسبة الفوائد على الكريديت كارد", "language": "ar", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "لو سمحت نسبة الفوائد على الكريديت كارد", "language": "ar", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "محتاج معلومة عن نسبة الفوائد على الكريديت كارد", "language": "ar", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "أسئلة عن نسبة الفوائد على الكريديت كارد", "language": "ar", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "please explain which revolving credit cards does NBE offer", "language": "en", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "could you clarify which revolving credit cards does NBE offer", "language": "en", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "looking for info on which revolving credit cards does NBE offer", "language": "en", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "customer question about which revolving credit cards does NBE offer", "language": "en", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "please explain visa platinum rewards card details", "language": "en", "intent": "credit_card", "expected_url_contains": "CreditCards"}
+{"query": "could you clarify visa platinum rewards card details", "language": "en", "intent": "credit_card", "expected_url_contains": "CreditCards"}

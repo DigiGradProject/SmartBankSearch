@@ -1,6 +1,10 @@
 from pathlib import Path
+from typing import Literal, Self
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from shared.retrieval_mode import RetrievalMode
 
 
 class Settings(BaseSettings):
@@ -21,7 +25,12 @@ class Settings(BaseSettings):
     filter_min_hits_high_conf: int = 1
     filter_min_hits_low_conf: int = 3
     filter_allow_broad_fallback: bool = True
-    force_canonical_inject: bool = True
+    # Retrieval control plane (replaces force_canonical_inject as the primary switch)
+    retrieval_mode: Literal["PURE_SEMANTIC", "ENTERPRISE"] = RetrievalMode.ENTERPRISE.value
+    business_rules_enabled: bool = True
+    # Deprecated: hard document injection is removed. Kept for .env backward compat.
+    # When True with legacy env, enables business_rules soft boosts only (no inject).
+    force_canonical_inject: bool = False
 
     bm25_enabled: bool = True
     bm25_index_path: Path = project_root / "data" / "bm25" / "corpus.pkl"
@@ -55,6 +64,11 @@ class Settings(BaseSettings):
     llm_fallback_enabled: bool = True
 
     # Enterprise feature flags (Phase 3–4)
+    # Layered intent: BGE-M3 semantic primary, regex fallback (see intent_fallback.py)
+    semantic_intent_enabled: bool = True
+    semantic_intent_high_confidence: float = 0.90
+    semantic_intent_regex_fallback_threshold: float = 0.60
+    semantic_intent_min_score: float = 0.42
     minilm_intent_fallback_enabled: bool = False
     minilm_intent_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     gliner_enabled: bool = False
@@ -92,6 +106,19 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 7000
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
+
+    @model_validator(mode="after")
+    def _migrate_legacy_force_inject(self) -> Self:
+        """Map deprecated force_canonical_inject → soft business rules (never hard inject)."""
+        if self.force_canonical_inject and not self.business_rules_enabled:
+            self.business_rules_enabled = True
+        # Hard injection is permanently disabled regardless of legacy flag.
+        self.force_canonical_inject = False
+        return self
+
+    @property
+    def retrieval_mode_enum(self) -> RetrievalMode:
+        return RetrievalMode(self.retrieval_mode)
 
 
 settings = Settings()

@@ -1,4 +1,9 @@
-"""Retrieval decision engine — ANSWER / RETRY / FORCE_CANONICAL / NO_ANSWER."""
+"""Retrieval decision engine — ANSWER / RETRY / NO_ANSWER.
+
+FORCE_CANONICAL is retained as a deprecated enum value for API/log compatibility
+but is never emitted. Business rules soft-boost ranking earlier in the pipeline;
+they must never pin or inject a document here.
+"""
 
 from __future__ import annotations
 
@@ -6,15 +11,19 @@ from dataclasses import dataclass
 from enum import Enum
 
 from ingestion.embedding.vector_store import RetrievedChunk
-from services.rag.metadata_filter import CANONICAL_URL_MARKERS
+from services.rag.metadata_filter import (
+    preferred_categories_for_intent,
+    soft_url_markers_for_intent,
+)
 from services.search_service.intent_classifier import QueryIntent
 
 
 class RetrievalDecision(str, Enum):
     ANSWER = "ANSWER"
     RETRY_RELATED = "RETRY_RELATED"
-    FORCE_CANONICAL = "FORCE_CANONICAL"
     NO_ANSWER = "NO_ANSWER"
+    # Deprecated: hard pin removed. Kept so older clients/log parsers do not crash.
+    FORCE_CANONICAL = "FORCE_CANONICAL"
 
 
 @dataclass(frozen=True)
@@ -27,13 +36,17 @@ class DecisionResult:
 def _top_matches_intent(chunk: RetrievedChunk | None, intent: QueryIntent) -> bool:
     if chunk is None:
         return False
-    doc_type = getattr(chunk, "doc_type", "general") or "general"
-    if doc_type in intent.allowed_doc_types:
+    doc_type = (getattr(chunk, "doc_type", "general") or "general").lower()
+    if doc_type in {d.lower() for d in intent.allowed_doc_types}:
         return True
     url = chunk.url or ""
-    for marker in CANONICAL_URL_MARKERS.get(intent.intent, ()):
+    for marker in soft_url_markers_for_intent(intent.intent):
         if marker in url:
             return True
+    preferred = preferred_categories_for_intent(intent.intent)
+    category = (getattr(chunk, "category", "") or "").lower()
+    if preferred and any(token in category or token in doc_type for token in preferred):
+        return True
     return False
 
 
@@ -45,34 +58,20 @@ def decide(
     threshold: float,
     canonical_candidates: list[RetrievedChunk] | None = None,
 ) -> DecisionResult:
-    top = chunks[0] if chunks else None
+    """Decide answer eligibility without injecting documents.
 
-    # Prefer pinning a canonical page present in index but missing/low in ranking.
-    if intentional_canonical := _best_canonical(intent, chunks, canonical_candidates or []):
-        if top is None or not _top_matches_intent(top, intent):
-            return DecisionResult(
-                RetrievalDecision.FORCE_CANONICAL,
-                "canonical_page_available_but_top_out_of_family",
-                intentional_canonical,
-            )
-        # Canonical exists but ranked below Top-1 out-of-family — still force.
-        if top and not _top_matches_intent(top, intent):
-            return DecisionResult(
-                RetrievalDecision.FORCE_CANONICAL,
-                "top1_out_of_family",
-                intentional_canonical,
-            )
+    ``canonical_candidates`` is accepted for backward compatibility and ignored
+    for injection. Soft boosts already re-ranked ``chunks`` when enterprise rules
+    were enabled.
+    """
+    _ = canonical_candidates  # retained signature; never used to force-inject
+    top = chunks[0] if chunks else None
 
     if not chunks:
         return DecisionResult(RetrievalDecision.NO_ANSWER, "no_chunks")
 
     if intent.confidence >= 0.9 and not _top_matches_intent(top, intent):
-        if canonical_candidates:
-            return DecisionResult(
-                RetrievalDecision.FORCE_CANONICAL,
-                "high_intent_confidence_out_of_family_top1",
-                canonical_candidates[0],
-            )
+        # Ask hybrid path / planner to broaden — never force a URL.
         return DecisionResult(RetrievalDecision.RETRY_RELATED, "top1_out_of_family_retry")
 
     if confidence < threshold:
@@ -89,10 +88,11 @@ def _best_canonical(
     ranked: list[RetrievedChunk],
     candidates: list[RetrievedChunk],
 ) -> RetrievedChunk | None:
-    markers = CANONICAL_URL_MARKERS.get(intent.intent, ())
+    """Locate preferred URL among already-retrieved candidates (no index inject)."""
+    markers = soft_url_markers_for_intent(intent.intent)
     if not markers:
         return None
-    pool = list(candidates) + list(ranked)
+    pool = list(ranked) + list(candidates)
     for chunk in pool:
         url = chunk.url or ""
         if any(marker in url for marker in markers):
@@ -101,5 +101,6 @@ def _best_canonical(
 
 
 def pin_chunk_first(chunks: list[RetrievedChunk], pinned: RetrievedChunk) -> list[RetrievedChunk]:
+    """Utility retained for tests; production search no longer pins via decision."""
     rest = [chunk for chunk in chunks if chunk.chunk_id != pinned.chunk_id]
     return [pinned, *rest]

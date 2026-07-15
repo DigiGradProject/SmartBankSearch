@@ -60,6 +60,7 @@ def understand_query(query: str, language: str = "auto") -> QueryUnderstanding:
         language=resolved_language,
         intent=intent.intent,
         intent_confidence=intent.confidence,
+        intent_source=intent.source,
         entity_count=len(entities_result.entities),
         search_query_len=len(search_query),
     )

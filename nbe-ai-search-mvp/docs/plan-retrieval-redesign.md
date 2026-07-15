@@ -89,14 +89,10 @@ Answer + Sources + Confidence
 2. **Fix canonical boosts** for accounts → CategoryIDs, not SPA shell `#/AR/Accounts`
 3. **Rerank contract:** candidates 20 → return 5 for LLM context
 4. **Prompt already updated** — keep structured NO_ANSWER prompt; add response formatter module
-5. **Module façades** (thin wrappers, no big move yet):
-   - `services/rag/pipeline.py`
-   - `services/rag/retriever.py` (wrap HybridRetriever)
-   - `services/rag/reranker.py` (wrap existing)
-   - `services/rag/intent_classifier.py` (re-export)
-   - `services/rag/prompt_builder.py`
-   - `services/rag/response_formatter.py`
-   - `services/rag/llm.py` (re-export)
+5. **Module layout** (see `services/README.md`):
+   - `services/search_service/` — hybrid retrieval, reranker, regex rules
+   - `services/rag/` — query understanding, layered intent, confidence, decision engine
+   - `services/api/orchestrator.py` — production HTTP pipeline (no duplicate `pipeline.py`)
 6. Golden queries: account open + required documents
 
 ### Why this improves retrieval

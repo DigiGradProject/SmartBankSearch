@@ -41,6 +41,7 @@ class QueryIntent:
     expand_ar: str = ""
     expand_en: str = ""
     negative_terms: tuple[str, ...] = ()
+    source: str = "regex"  # critical | semantic | regex | general
 
 
 @dataclass(frozen=True)
@@ -298,6 +299,7 @@ def classify_query(query: str, language: str) -> QueryIntent:
             expand_ar=rule.expand_ar,
             expand_en=rule.expand_en,
             negative_terms=rule.negative_terms,
+            source="regex",
         )
 
     return QueryIntent(
@@ -305,6 +307,7 @@ def classify_query(query: str, language: str) -> QueryIntent:
         category="general",
         confidence=0.0,
         allowed_doc_types=INTENT_DOC_TYPES["general_faq"],
+        source="general",
     )
 
 

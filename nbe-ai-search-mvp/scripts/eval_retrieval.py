@@ -1,4 +1,8 @@
-"""Evaluate retrieval quality against golden query set with release gate."""
+"""Evaluate retrieval quality against golden query set with release gate.
+
+Backward compatible. Prefer ``scripts/eval_retrieval_modes.py`` for
+PURE_SEMANTIC vs ENTERPRISE comparison (Recall@5, MRR, nDCG, …).
+"""
 
 from __future__ import annotations
 
@@ -10,9 +14,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from services.search_service.intent_classifier import classify_query  # noqa: E402
+from services.rag.intent_fallback import classify_with_fallback  # noqa: E402
 from services.search_service.search import SearchService  # noqa: E402
 from shared.config import settings  # noqa: E402
+from shared.retrieval_mode import RetrievalMode  # noqa: E402
 
 
 def load_golden(path: Path) -> list[dict]:
@@ -26,23 +31,34 @@ def load_golden(path: Path) -> list[dict]:
     return rows
 
 
-def evaluate(golden_path: Path, top_k: int = 3) -> dict:
+def evaluate(
+    golden_path: Path,
+    top_k: int = 3,
+    *,
+    retrieval_mode: str = "ENTERPRISE",
+) -> dict:
     service = SearchService()
     cases = load_golden(golden_path)
     intent_hits = 0
     url_hits = 0
     forbidden_misses = 0
     results: list[dict] = []
+    mode = RetrievalMode(retrieval_mode)
 
     for case in cases:
         query = case["query"]
         language = case["language"]
-        intent = classify_query(query, language)
+        intent = classify_with_fallback(query, language)
         intent_ok = intent.intent == case["intent"]
         if intent_ok:
             intent_hits += 1
 
-        retrieval = service.retrieve(query, language)
+        retrieval = service.retrieve(
+            query,
+            language,
+            retrieval_mode=mode,
+            business_rules=(mode == RetrievalMode.ENTERPRISE),
+        )
         top_urls = [chunk.url for chunk in retrieval.chunks[:top_k]]
         expected = case.get("expected_url_contains", "")
         forbidden = case.get("forbidden_url_contains", "")
@@ -65,6 +81,8 @@ def evaluate(golden_path: Path, top_k: int = 3) -> dict:
                 "forbidden_ok": forbidden_ok,
                 "top_url": top_urls[0] if top_urls else None,
                 "filter_applied": retrieval.filter_applied,
+                "retrieval_mode": retrieval.retrieval_mode,
+                "business_rules_applied": retrieval.business_rules_applied,
             }
         )
 
@@ -74,6 +92,7 @@ def evaluate(golden_path: Path, top_k: int = 3) -> dict:
         "intent_accuracy": intent_hits / total if total else 0.0,
         "top3_url_hit_rate": url_hits / total if total else 0.0,
         "forbidden_avoid_rate": forbidden_misses / total if total else 0.0,
+        "retrieval_mode": mode.value,
         "results": results,
     }
 
@@ -87,13 +106,20 @@ def main() -> None:
     )
     parser.add_argument("--report", action="store_true")
     parser.add_argument("--gate", action="store_true", help="Exit non-zero if below thresholds")
+    parser.add_argument(
+        "--mode",
+        choices=["PURE_SEMANTIC", "ENTERPRISE"],
+        default="ENTERPRISE",
+        help="Retrieval mode (default ENTERPRISE)",
+    )
     args = parser.parse_args()
 
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
 
-    summary = evaluate(args.golden)
+    summary = evaluate(args.golden, retrieval_mode=args.mode)
     print(
+        f"mode={summary['retrieval_mode']} "
         f"cases={summary['total']} "
         f"intent_acc={summary['intent_accuracy']:.1%} "
         f"top3_url={summary['top3_url_hit_rate']:.1%} "

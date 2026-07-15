@@ -147,7 +147,7 @@ def test_loan_category_id_classified_as_loan_and_newscat_as_news():
     assert news.doc_type == "news"
 
 
-def test_decision_force_canonical_when_top_out_of_family():
+def test_decision_retries_when_top_out_of_family():
     intent = QueryIntent(
         intent="exchange_rate",
         category="exchange_rates",
@@ -162,7 +162,10 @@ def test_decision_force_canonical_when_top_out_of_family():
         score=0.5,
     )
     result = decide(intent, [account], confidence=0.8, threshold=0.42, canonical_candidates=[fx])
-    assert result.decision == RetrievalDecision.FORCE_CANONICAL
+    # Soft-boost era: never FORCE_CANONICAL inject; ask for related retry instead.
+    assert result.decision == RetrievalDecision.RETRY_RELATED
+    assert result.pinned_chunk is None
+    # pin_chunk_first remains available as a utility, unused by decide().
     pinned = pin_chunk_first([account], fx)
     assert pinned[0].chunk_id == "fx"
 

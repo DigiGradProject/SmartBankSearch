@@ -1,19 +1,19 @@
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from services.search_service.hybrid_retriever import HybridRetriever
-from services.search_service.intent_boost import apply_intent_scoring
+from services.rag.business_rules import apply_business_rule_scoring
 from services.search_service.product_detail import prioritize_product_chunks
 from services.search_service.card_catalog import prioritize_credit_card_chunks
 from services.search_service.account_rank import prioritize_account_chunks
 from services.rag.hybrid_rank import apply_metadata_ranking
 from services.rag.confidence import compute_confidence
-from services.rag.decision_engine import RetrievalDecision, decide, pin_chunk_first
-from services.rag.metadata_filter import canonical_markers_for_intent
+from services.rag.decision_engine import decide
 from services.rag.query_understanding import QueryUnderstanding, understand_query
 from services.search_service.intent_classifier import QueryIntent, should_apply_metadata_filter
 from services.search_service.keyword_rank import extract_query_terms, keyword_overlap_score, rerank_chunks
 from services.search_service.reranker import get_reranker
 from shared.config import settings
+from shared.retrieval_mode import RetrievalMode, business_rules_active, parse_retrieval_mode
 from shared.url_canonical import canonical_url_key
 from shared.document_quality import (
     is_junk_document,
@@ -23,7 +23,6 @@ from shared.document_quality import (
 )
 from shared.logging import get_logger
 from ingestion.embedding.vector_store import RetrievedChunk
-from ingestion.lexical.bm25_index import get_bm25_index
 
 logger = get_logger(__name__)
 
@@ -54,6 +53,8 @@ class RetrievalResult:
     understand: QueryUnderstanding | None = None
     retrieve_ms: float = 0.0
     rerank_ms: float = 0.0
+    retrieval_mode: str = RetrievalMode.ENTERPRISE.value
+    business_rules_applied: bool = False
 
 
 def _should_drop_menu_heavy_chunk(chunk: RetrievedChunk) -> bool:
@@ -91,64 +92,23 @@ def _apply_family_prioritizers(
     return chunks
 
 
-def _collect_canonical_candidates(
-    intent: QueryIntent,
-    language: str,
-) -> list[RetrievedChunk]:
-    markers = canonical_markers_for_intent(intent.intent)
-    if not markers or not settings.force_canonical_inject:
-        return []
-    bm25 = get_bm25_index()
-    if bm25.size <= 0:
-        return []
-    candidates: list[RetrievedChunk] = []
-    seen: set[str] = set()
-    for marker in markers:
-        for indexed in bm25.match_urls(marker, language=language, limit=5):
-            key = canonical_url_key(indexed.url or "")
-            if not key or key in seen:
-                continue
-            seen.add(key)
-            candidates.append(bm25.to_retrieved_chunk(indexed, 0.99))
-    return candidates
-
-
-def _force_inject_canonical(
-    intent: QueryIntent,
-    language: str,
+def _apply_enterprise_ranking(
     chunks: list[RetrievedChunk],
+    *,
+    query: str,
+    language: str,
+    intent: QueryIntent,
+    rules_on: bool,
 ) -> list[RetrievedChunk]:
-    if not settings.force_canonical_inject:
+    """Soft business-rule ranking. Never injects documents into the pool."""
+    if not rules_on or not chunks:
         return chunks
-    markers = canonical_markers_for_intent(intent.intent)
-    if not markers:
-        return chunks
-
-    def _matches(chunk: RetrievedChunk) -> bool:
-        url = chunk.url or ""
-        return any(marker in url for marker in markers)
-
-    if any(_matches(chunk) for chunk in chunks[:2]):
-        # Already near top — still pin the best match first.
-        for idx, chunk in enumerate(chunks):
-            if _matches(chunk):
-                if idx == 0:
-                    return chunks
-                pinned = replace(chunk, score=max(chunk.score, 0.99))
-                return pin_chunk_first(chunks, pinned)
-        return chunks
-
-    candidates = _collect_canonical_candidates(intent, language)
-    if not candidates:
-        return chunks
-
-    best = replace(candidates[0], score=0.99)
-    logger.info(
-        "force_canonical_inject",
-        intent=intent.intent,
-        url=best.url,
+    chunks = apply_business_rule_scoring(
+        chunks, intent, query, language, enabled=True
     )
-    return pin_chunk_first(chunks, best)
+    chunks = apply_metadata_ranking(chunks, intent)
+    chunks = _apply_family_prioritizers(query, language, chunks, intent)
+    return chunks
 
 
 def _build_citation_pool(
@@ -156,41 +116,36 @@ def _build_citation_pool(
     query: str,
     language: str,
     intent: QueryIntent,
+    *,
+    rules_on: bool,
 ) -> list[RetrievedChunk]:
     pool = [chunk for chunk in chunks if _keep_chunk_for_citation_pool(chunk)]
     if not pool:
         return []
 
     pool = rerank_chunks(pool, query, language)
-    pool = apply_intent_scoring(pool, intent, query, language)
-    pool = apply_metadata_ranking(pool, intent)
-    pool = _apply_family_prioritizers(query, language, pool, intent)
-    pool = _force_inject_canonical(intent, language, pool)
+    pool = _apply_enterprise_ranking(
+        pool, query=query, language=language, intent=intent, rules_on=rules_on
+    )
 
-    if intent.intent in {"credit_card", "card_types"}:
+    if rules_on and intent.intent in {"credit_card", "card_types"}:
         card_pool = [
             chunk
             for chunk in pool
             if any(
                 marker in (chunk.url or "")
-                for marker in ("CreditCardsID", "DepitCardsID", "PrepaidCardsID", "#/AR/CreditCards", "#/EN/CreditCards")
+                for marker in (
+                    "CreditCardsID",
+                    "DepitCardsID",
+                    "PrepaidCardsID",
+                    "#/AR/CreditCards",
+                    "#/EN/CreditCards",
+                )
             )
         ]
+        # Prefer card URLs already retrieved — never pull external BM25 injects.
         if card_pool:
             pool = card_pool
-
-    if intent.intent == "credit_card":
-        bm25 = get_bm25_index()
-        if bm25.size > 0:
-            for indexed in bm25.match_urls(
-                "CreditCardsID",
-                "ProductDetails",
-                language=language,
-                limit=15,
-            ):
-                supplement = bm25.to_retrieved_chunk(indexed, 0.55)
-                if _keep_chunk_for_citation_pool(supplement):
-                    pool.append(supplement)
 
     deduped: list[RetrievedChunk] = []
     seen_urls: set[str] = set()
@@ -235,10 +190,18 @@ class SearchService:
         language: str = "auto",
         *,
         understanding: QueryUnderstanding | None = None,
+        retrieval_mode: str | RetrievalMode | None = None,
+        business_rules: bool | None = None,
     ) -> RetrievalResult:
         import time
 
         t0 = time.perf_counter()
+        mode = parse_retrieval_mode(retrieval_mode or settings.retrieval_mode)
+        rules_flag = (
+            settings.business_rules_enabled if business_rules is None else business_rules
+        )
+        rules_on = business_rules_active(mode, business_rules_enabled=rules_flag)
+
         qu = understanding or understand_query(query, language)
         resolved_language = qu.language
         intent = qu.intent
@@ -254,8 +217,11 @@ class SearchService:
             settings.retrieval_top_k * settings.retrieval_candidate_multiplier,
             settings.rerank_pool_size,
         )
-        apply_filter = settings.intent_filter_enabled and should_apply_metadata_filter(
-            intent, settings.intent_filter_confidence
+        # PURE_SEMANTIC: no intent metadata filter — independent semantic measurement.
+        apply_filter = (
+            rules_on
+            and settings.intent_filter_enabled
+            and should_apply_metadata_filter(intent, settings.intent_filter_confidence)
         )
         doc_types = list(intent.allowed_doc_types) if apply_filter else None
 
@@ -271,7 +237,7 @@ class SearchService:
         retrieve_ms = (time.perf_counter() - t0) * 1000.0
 
         citation_source = list(raw_chunks)
-        if intent.intent in {"credit_card", "card_types"}:
+        if rules_on and intent.intent in {"credit_card", "card_types"}:
             broad_chunks, _ = self.hybrid_retriever.retrieve(
                 embed_query,
                 resolved_language,
@@ -293,16 +259,26 @@ class SearchService:
             chunks = [
                 chunk
                 for chunk in raw_chunks
-                if not is_junk_document(chunk.document_id) and not is_low_value_document(chunk.document_id)
+                if not is_junk_document(chunk.document_id)
+                and not is_low_value_document(chunk.document_id)
             ]
 
-        citation_chunks = _build_citation_pool(citation_source, expanded_query, resolved_language, intent)
+        citation_chunks = _build_citation_pool(
+            citation_source,
+            expanded_query,
+            resolved_language,
+            intent,
+            rules_on=rules_on,
+        )
 
         chunks = rerank_chunks(chunks, expanded_query, resolved_language)
-        chunks = apply_intent_scoring(chunks, intent, expanded_query, resolved_language)
-        chunks = apply_metadata_ranking(chunks, intent)
-        chunks = _apply_family_prioritizers(expanded_query, resolved_language, chunks, intent)
-        chunks = _force_inject_canonical(intent, resolved_language, chunks)
+        chunks = _apply_enterprise_ranking(
+            chunks,
+            query=expanded_query,
+            language=resolved_language,
+            intent=intent,
+            rules_on=rules_on,
+        )
 
         t_rerank = time.perf_counter()
         if settings.reranker_enabled and chunks:
@@ -314,10 +290,14 @@ class SearchService:
                     chunks[:rerank_pool],
                     top_k=rerank_keep,
                 )
-                chunks = apply_intent_scoring(chunks, intent, expanded_query, resolved_language)
-                chunks = apply_metadata_ranking(chunks, intent)
-                chunks = _apply_family_prioritizers(expanded_query, resolved_language, chunks, intent)
-                chunks = _force_inject_canonical(intent, resolved_language, chunks)
+                # Soft re-apply enterprise weights after cross-encoder (still no inject).
+                chunks = _apply_enterprise_ranking(
+                    chunks,
+                    query=expanded_query,
+                    language=resolved_language,
+                    intent=intent,
+                    rules_on=rules_on,
+                )
             except Exception as exc:  # noqa: BLE001
                 logger.warning("reranker_failed_fallback_keyword", error=str(exc))
                 chunks = chunks[: settings.rerank_keep_size]
@@ -325,45 +305,40 @@ class SearchService:
             chunks = chunks[: settings.rerank_keep_size]
         rerank_ms = (time.perf_counter() - t_rerank) * 1000.0
 
-        canonical_candidates = _collect_canonical_candidates(intent, resolved_language)
         breakdown = compute_confidence(chunks, llm_confidence=0.0, intent=intent)
         legacy = _compute_confidence(chunks, expanded_query, resolved_language)
         confidence = round(min(1.0, breakdown.final * 0.75 + legacy * 0.25), 3)
         confidence_reason = breakdown.reason
 
-        decision = decide(
-            intent,
-            chunks,
-            confidence=confidence,
-            threshold=settings.confidence_threshold,
-            canonical_candidates=canonical_candidates,
-        )
-        if decision.decision == RetrievalDecision.FORCE_CANONICAL and decision.pinned_chunk is not None:
-            chunks = pin_chunk_first(chunks, replace(decision.pinned_chunk, score=0.99))
-            chunks = chunks[: settings.rerank_keep_size]
-            breakdown = compute_confidence(chunks, llm_confidence=0.0, intent=intent)
-            confidence = breakdown.final
-            confidence_reason = breakdown.reason
+        if mode == RetrievalMode.PURE_SEMANTIC:
+            # Eval path: return ranked hybrid results without enterprise gate.
+            decision_label = "ANSWER" if chunks else "NO_ANSWER"
+            should_answer = bool(chunks)
+            abstention_reason = None if should_answer else "no_relevant_chunks"
+        else:
             decision = decide(
                 intent,
                 chunks,
                 confidence=confidence,
                 threshold=settings.confidence_threshold,
-                canonical_candidates=canonical_candidates,
+                canonical_candidates=None,
             )
-
-        should_answer = (
-            decision.decision == RetrievalDecision.ANSWER
-            and confidence >= settings.confidence_threshold
-            and len(chunks) > 0
-        )
-        abstention_reason = None
-        if not chunks:
-            abstention_reason = "no_relevant_chunks"
-        elif decision.decision == RetrievalDecision.NO_ANSWER:
-            abstention_reason = decision.reason
-        elif confidence < settings.confidence_threshold:
-            abstention_reason = "low_retrieval_confidence"
+            decision_label = decision.decision.value
+            should_answer = (
+                decision.decision.value == "ANSWER"
+                and confidence >= settings.confidence_threshold
+                and len(chunks) > 0
+            )
+            abstention_reason = None
+            if not chunks:
+                abstention_reason = "no_relevant_chunks"
+            elif decision.decision.value == "NO_ANSWER":
+                abstention_reason = decision.reason
+            elif decision.decision.value == "RETRY_RELATED":
+                abstention_reason = decision.reason
+                should_answer = False
+            elif confidence < settings.confidence_threshold:
+                abstention_reason = "low_retrieval_confidence"
 
         logger.info(
             "retrieval_completed",
@@ -376,11 +351,12 @@ class SearchService:
             chunk_count=len(chunks),
             confidence=confidence,
             should_answer=should_answer,
-            decision=decision.decision.value,
-            decision_reason=decision.reason,
+            decision=decision_label,
             embedding_model=settings.embedding_model,
             reranker=settings.reranker_enabled,
             rewritten_len=len(expanded_query),
+            retrieval_mode=mode.value,
+            business_rules_applied=rules_on,
         )
 
         return RetrievalResult(
@@ -398,11 +374,13 @@ class SearchService:
             citation_chunks=citation_chunks,
             rewritten_query=expanded_query,
             entities=entity_values,
-            decision=decision.decision.value,
+            decision=decision_label,
             confidence_reason=confidence_reason,
             original_query=original_query,
             entity_payload=entity_payload,
             understand=qu,
             retrieve_ms=retrieve_ms,
             rerank_ms=rerank_ms,
+            retrieval_mode=mode.value,
+            business_rules_applied=rules_on,
         )

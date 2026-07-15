@@ -1,4 +1,8 @@
-"""Staged metadata filter policy (L0 exact → L4 broad)."""
+"""Staged metadata filter policy (L0 exact → L4 broad).
+
+Preferred categories drive soft metadata weighting — not exact URL injection.
+Canonical URL markers remain as soft ranking signals only.
+"""
 
 from __future__ import annotations
 
@@ -19,6 +23,28 @@ RELATED_DOC_TYPES: dict[str, tuple[str, ...]] = {
     "certificate_buy": ("certificate",),
 }
 
+# Soft preferred topic tokens for enterprise ranking (not hard filters).
+PREFERRED_CATEGORIES: dict[str, tuple[str, ...]] = {
+    "exchange_rate": ("exchange", "currency", "forex", "exchange_rate", "currency_converter"),
+    "certificate_rate": ("certificate", "yield", "certificate_rate"),
+    "certificate_types": ("certificate",),
+    "certificate_buy": ("certificate",),
+    "personal_loan": ("loan", "personal_loan"),
+    "credit_card": ("credit_card", "card", "credit"),
+    "debit_card": ("debit_card", "card", "debit"),
+    "card_types": ("card", "credit_card", "debit_card"),
+    "branch_locator": ("branch", "locator"),
+    "atm_locator": ("atm", "branch", "locator"),
+    "account_open": ("account", "current", "savings"),
+    "wallet": ("wallet", "digital"),
+    "offers": ("offer", "promotion"),
+    "news": ("news",),
+    "reports": ("report",),
+    "corporate": ("corporate",),
+    "sme": ("sme",),
+    "faq": ("faq",),
+}
+
 # Intents that must not broaden when at least one exact hit exists.
 NO_BROAD_IF_ANY_HIT: frozenset[str] = frozenset(
     {
@@ -29,12 +55,18 @@ NO_BROAD_IF_ANY_HIT: frozenset[str] = frozenset(
     }
 )
 
+# Soft URL similarity markers (ranking preference only — never used to inject docs).
 CANONICAL_URL_MARKERS: dict[str, tuple[str, ...]] = {
     "exchange_rate": ("ExchangeRatesAndCurrencyConverter",),
     "personal_loan": ("PersonalLoansCatID", "/Loans", "Loans"),
     "credit_card": ("CreditCardsID", "/CreditCards"),
     "account_open": ("CurrentAccountsID", "AccountsID"),
     "certificate_rate": ("LocalCertificatesID", "CertificatesRatesForeignCurrency"),
+    "certificate_types": ("CertificatesID",),
+    "certificate_buy": ("CertificatesID",),
+    "card_types": ("CardsID", "CreditCards", "DepitCards"),
+    "branch_locator": ("ATMBranch",),
+    "atm_locator": ("ATMBranch",),
 }
 
 
@@ -95,4 +127,15 @@ def should_broaden(
 
 
 def canonical_markers_for_intent(intent_name: str) -> tuple[str, ...]:
+    """Soft URL markers used for ranking weight — never for force-inject."""
     return CANONICAL_URL_MARKERS.get(intent_name, ())
+
+
+def soft_url_markers_for_intent(intent_name: str) -> tuple[str, ...]:
+    """Alias for clarity at call sites that soft-boost preferred URLs."""
+    return canonical_markers_for_intent(intent_name)
+
+
+def preferred_categories_for_intent(intent_name: str) -> tuple[str, ...]:
+    """Preferred topic tokens for metadata weighting (not URL substring filters)."""
+    return PREFERRED_CATEGORIES.get(intent_name, ())

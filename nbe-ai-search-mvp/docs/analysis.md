@@ -241,7 +241,7 @@ Insert after rerank / before LLM:
 |----------|-----------|
 | `ANSWER` | Top-1 doc_type ∈ allow-list OR URL matches canonical slug; confidence ≥ threshold |
 | `RETRY_RELATED` | High intent conf but Top-1 out-of-family; broaden one stage and re-rerank once |
-| `FORCE_CANONICAL` | Intent has known canonical URL present in index (BM25 `match_urls`) — inject + pin #1 |
+| `FORCE_CANONICAL` | **Deprecated.** Hard inject/pin removed. Decision engine emits `RETRY_RELATED` / `NO_ANSWER` only. Soft boosts live in `business_rules.py`. |
 | `NO_ANSWER` | No canonical; Top-1–Top-2 gap tiny & all out-of-family; or confidence &lt; threshold |
 
 ### TASK 3 — Confidence redesign
