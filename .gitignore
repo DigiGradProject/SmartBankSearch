@@ -75,3 +75,4 @@ temp/
 *.7z
 *.tar
 *.tar.gz
+.continue/
