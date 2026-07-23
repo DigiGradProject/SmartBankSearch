@@ -275,6 +275,13 @@ class Orchestrator:
             *,
             faithfulness: str | None = None,
         ) -> SearchResponse:
+            # Remove suggestions that duplicate a source already shown as a citation
+            if response.citations and response.suggestions:
+                cited_urls = {c.url.lower().strip() for c in response.citations if c.url}
+                response.suggestions = [
+                    s for s in response.suggestions
+                    if not (s.url and s.url.lower().strip() in cited_urls)
+                ]
             response = self._enrich_response_meta(
                 response,
                 retrieval,
