@@ -3,11 +3,11 @@ from datetime import UTC, datetime
 
 from ingestion.chunking.chunker import chunk_document, indexable_chunks
 from ingestion.document_processing.processor import (
+    load_curated_documents,
     load_documents_from_scrape,
     load_documents_json,
     load_documents_jsonl,
     load_merged_corpus,
-    load_product_stubs,
 )
 from ingestion.embedding.vector_store import VectorStore
 from ingestion.lexical.bm25_index import rebuild_bm25_index
@@ -32,12 +32,12 @@ def run_ingestion(source: str = "documents_json", limit: int | None = None) -> I
     try:
         if source == "scrape":
             documents = load_documents_from_scrape(settings.scrape_root, limit=limit)
-            documents.extend(load_product_stubs(settings.project_root))
+            documents.extend(load_curated_documents(settings.project_root))
         elif source == "cleaned_jsonl":
             if not settings.cleaned_jsonl_path.exists():
                 raise FileNotFoundError(f"Cleaned JSONL not found: {settings.cleaned_jsonl_path}")
             documents = load_documents_jsonl(settings.cleaned_jsonl_path, limit=limit)
-            documents.extend(load_product_stubs(settings.project_root))
+            documents.extend(load_curated_documents(settings.project_root))
         elif source == "merged":
             documents = load_merged_corpus(settings.project_root, limit=limit)
         else:
@@ -47,7 +47,7 @@ def run_ingestion(source: str = "documents_json", limit: int | None = None) -> I
                 documents = load_documents_json(settings.documents_path)
                 if limit:
                     documents = documents[:limit]
-            documents.extend(load_product_stubs(settings.project_root))
+            documents.extend(load_curated_documents(settings.project_root))
 
         store = VectorStore()
         upserted_total = 0
@@ -71,6 +71,12 @@ def run_ingestion(source: str = "documents_json", limit: int | None = None) -> I
         if settings.bm25_enabled and all_chunks:
             rebuild_bm25_index(all_chunks)
 
+        pruned_total = 0
+        if not errors and limit is None:
+            pruned_total = store.delete_chunks_not_in(
+                {chunk.chunk_id for chunk in all_chunks}
+            )
+
         status.chunks_upserted = upserted_total
         status.chunks_skipped = skipped_total
         status.errors = errors
@@ -82,6 +88,7 @@ def run_ingestion(source: str = "documents_json", limit: int | None = None) -> I
             documents=status.documents_processed,
             upserted=upserted_total,
             skipped=skipped_total,
+            pruned=pruned_total,
             bm25_chunks=len(all_chunks),
         )
         return status

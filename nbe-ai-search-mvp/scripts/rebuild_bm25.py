@@ -24,9 +24,9 @@ def main() -> None:
     if args.source == "merged":
         documents = load_merged_corpus(settings.project_root, limit=args.limit)
     else:
-        from ingestion.document_processing.processor import load_documents_jsonl, load_product_stubs
+        from ingestion.document_processing.processor import load_curated_documents, load_documents_jsonl
         documents = load_documents_jsonl(settings.cleaned_jsonl_path, limit=args.limit)
-        documents.extend(load_product_stubs(settings.project_root))
+        documents.extend(load_curated_documents(settings.project_root))
 
     all_chunks = []
     for document in documents:

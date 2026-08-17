@@ -110,6 +110,15 @@ class VectorStore:
         )
         return len(to_upsert), skipped
 
+    def delete_chunks_not_in(self, chunk_ids: set[str]) -> int:
+        """Remove stale chunks after a successful, unbounded corpus rebuild."""
+        result = self._collection.get(include=[])
+        existing_ids = set(result.get("ids") or [])
+        stale_ids = sorted(existing_ids - chunk_ids)
+        if stale_ids:
+            self._collection.delete(ids=stale_ids)
+        return len(stale_ids)
+
     def query(
         self,
         query_text: str,

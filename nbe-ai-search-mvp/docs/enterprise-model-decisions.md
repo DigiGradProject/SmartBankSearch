@@ -280,7 +280,7 @@ nbe-ai-search-mvp/
     lexical/
   data/
     vocabulary/          # synonym ontology
-    product_stubs.json
+    curated_documents.json
   shared/                # config, schemas, logging
   tests/unit/
   tests/retrieval/

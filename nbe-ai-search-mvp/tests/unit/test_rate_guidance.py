@@ -16,7 +16,7 @@ def test_detects_egp_certificate_rate_query():
     assert is_local_egp_rate_query(q, "ar") is True
     guidance = rate_guidance(q, "ar")
     assert guidance is not None
-    assert "غير متوفرة" in guidance or "لا تتوفر" in guidance
+    assert "لن أذكر رقماً غير موثق" in guidance
     assert "%" not in guidance and "٪" not in guidance
 
 
@@ -38,29 +38,28 @@ def test_local_context_with_percent_is_applicable():
     assert context_has_applicable_rate(q, "ar", local_context) is True
 
 
-def test_rate_answer_includes_actionable_guidance():
+def test_rate_answer_reports_only_missing_retrieved_evidence():
     q = "شهادات الادخار بالعملة المحلية عائد شهادة سنة جنيه"
     answer = rate_answer(q, "ar")
     assert answer
-    assert "المحتوى المفهرس" in answer
-    assert "فرع" in answer or "موقع" in answer
+    assert "المستندات المسترجعة" in answer
+    assert "ديناميك" not in answer
 
 
-def test_rate_citations_include_local_certificates_page():
+def test_rate_guidance_does_not_inject_citations():
     q = "كم عائد شهادة سنة بالجنيه"
     citations = rate_citations(q, "ar")
-    assert any("CertificatesID" in item.url for item in citations)
+    assert citations == []
 
 
-def test_rate_suggestions_include_local_certificates_page():
+def test_rate_guidance_does_not_inject_suggestions():
     q = "كم عائد شهادة سنة بالجنيه"
     suggestions = rate_suggestions(q, "ar")
-    assert any("CertificatesID" in (item.url or "") for item in suggestions)
-    assert any(item.reason == "official_page" for item in suggestions)
+    assert suggestions == []
 
 
-def test_build_suggestions_prioritizes_official_pages():
+def test_build_suggestions_uses_queries_not_hard_coded_urls():
     suggestions = build_suggestions("كم فايده شهادة سنة جنيه", "ar", [])
     assert suggestions
-    assert suggestions[0].reason == "official_page"
-    assert suggestions[0].url
+    assert all(item.reason != "official_page" for item in suggestions)
+    assert all(item.url is None for item in suggestions)

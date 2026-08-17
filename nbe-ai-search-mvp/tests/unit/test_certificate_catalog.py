@@ -17,7 +17,7 @@ def test_build_certificate_types_answer_from_stubs():
         RetrievedChunk(
             "c1",
             "d1",
-            "شهادات",
+            "شهادات بلادي",
             "https://nbe/CertificatesID",
             "ar",
             "شهادات بلادي وشهادات الادخار بالعملة المحلية وشهادات الاستثمار",
@@ -27,8 +27,9 @@ def test_build_certificate_types_answer_from_stubs():
     ]
     answer = build_certificate_types_answer(chunks, "ar")
     assert answer
-    assert "شهادات" in answer
-    assert "بلادي" in answer or "محلية" in answer or "ادخار" in answer or "استثمار" in answer
+    assert "شهادات بلادي" in answer
+    assert "المسترجعة" in answer
+    assert build_certificate_types_answer([], "ar") is None
 
 
 def test_certificate_types_retrieval_optional():

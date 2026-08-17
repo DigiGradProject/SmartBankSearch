@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     scrape_root: Path = project_root.parent / "nbe_complete_scrape"
     chroma_path: Path = project_root / "data" / "chroma"
     # Bump when corpus schema/content changes materially.
-    chroma_collection: str = "nbe_chunks_bge_m3_v4"
+    chroma_collection: str = "nbe_chunks_bge_m3_v6"
     intent_filter_confidence: float = 0.75
     intent_filter_enabled: bool = True
     # Staged metadata filter (analysis.md Phase A/B)
@@ -89,7 +89,7 @@ class Settings(BaseSettings):
 
     # Semantic cache (Chroma similarity)
     semantic_cache_enabled: bool = True
-    semantic_cache_collection: str = "nbe_semantic_cache"
+    semantic_cache_collection: str = "nbe_semantic_cache_v7"
     semantic_cache_threshold: float = 0.95
     semantic_cache_ttl_seconds: int = 86400
 

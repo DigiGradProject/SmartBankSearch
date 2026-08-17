@@ -24,118 +24,18 @@ CREDIT_OVERVIEW_AR = re.compile(r"بطاق.{0,8}ائتمان|كريدت\s*كار
 CREDIT_OVERVIEW_EN = re.compile(r"credit\s*cards?", re.I)
 DEBIT_OR_PREPAID = re.compile(r"خصم|مدفوع|مدين|debit|prepaid", re.I)
 
-CARD_CATEGORY_MARKERS: list[tuple[re.Pattern[str], str, list[str]]] = [
-    (
-        re.compile(r"CreditCardsID|بطاقات\s*الائتمان|بطاقات\s*الإئتمان", re.I),
-        "بطاقات الائتمان",
-        [
-            "ماستركارد استاندرد",
-            "فيزا كلاسيك",
-            "ماستركارد مصر للطيران",
-            "فيزا جولد",
-            "ماستركارد تيتانيوم",
-            "ماستركارد UEFA Champions League",
-            "فيزا بلاتينم",
-            "فيزا بلاتينم الدولارية",
-            "ماستركارد بلاتينم",
-            "ماستركارد وورلد",
-            "فيزا سيغنتشر",
-            "ماستركارد وورلد إيليت",
-            "فيزا انفينيت",
-        ],
-    ),
-    (
-        re.compile(r"DepitCardsID|بطاقات\s*الخصم\s*المباشر", re.I),
-        "بطاقات الخصم المباشر",
-        [
-            "ميزة",
-            "كلاسيك",
-            "جولد",
-            "تيتانيوم",
-            "بلاتينم",
-            "وورلد",
-            "وورلد إيليت",
-            "فيزا بلاتينم بالدولار الأمريكي",
-        ],
-    ),
-    (
-        re.compile(r"PrepaidCardsID|البطاقات\s*المدفوعة\s*مقدما|المدفوعة\s*مقدم", re.I),
-        "البطاقات المدفوعة مقدماً",
-        [
-            "بطاقة ميزة المدفوعة مقدما",
-            "البطاقات المدفوعة مقدما من البنك الأهلى المصري",
-            "بطاقة ميزة المدفوعة مقدمًا الموحدة للجامعات",
-        ],
-    ),
-]
-
-CREDIT_CARD_TIERS: list[tuple[str, list[tuple[str, str]]]] = [
-    (
-        "بطاقات الدخول",
-        [
-            (
-                "فيزا كلاسيك / ماستركارد استاندرد",
-                "مناسبة للاستخدام المحلي والدولي، مع برنامج نقاط الأهلي وفترة سماح على المشتريات.",
-            ),
-            (
-                "ماستركارد مصر للطيران",
-                "بطاقة مرتبطة ببرنامج مصر للطيران مع مزايا سفر ونقاط مكافآت.",
-            ),
-        ],
-    ),
-    (
-        "بطاقات متوسطة",
-        [
-            (
-                "فيزا جولد / ماستركارد تيتانيوم",
-                "حد ائتماني أعلى ومزايا إضافية للتسوق محلياً ودولياً.",
-            ),
-            (
-                "ماستركارد UEFA Champions League",
-                "بطاقة مرتبطة بدوري أبطال أوروبا مع مزايا ترويجية.",
-            ),
-        ],
-    ),
-    (
-        "بطاقات مميزة (بريميوم)",
-        [
-            ("فيزا بلاتينم / ماستركارد بلاتينم", "مزايا رفاهية أعلى وحدود استخدام أكبر."),
-            ("فيزا بلاتينم الدولارية", "بطاقة بالدولار الأمريكي للمعاملات الدولية."),
-            ("ماستركارد وورلد / فيزا سيغنتشر", "مزايا سفر وخدمات مميزة لعملاء الملاءة المتوسطة والعالية."),
-            ("ماستركارد وورلد إيليت / فيزا انفينيت", "أعلى فئات البطاقات مع حدود ائتمانية كبيرة وخدمات حصرية."),
-        ],
-    ),
-]
-
-SHARED_CREDIT_FEATURES = [
-    "برنامج الأهلي بوينتس لاستبدال النقاط أو استرداد نقدي.",
-    "تقسيط المشتريات حتى 36 شهراً عبر خدمة التقسيط بالهاتف.",
-    "تقسيط بدون فوائد لمدة تصل إلى 12 شهراً لدى تجار معتمدين.",
-    "التسوق الآمن عبر الإنترنت بخدمة الكود الأمن OTP.",
-    "السداد عبر ماكينات الصراف الآلي، فوري، الأهلي نت، وإنستاباي.",
-]
-
-PRODUCT_LINE = re.compile(
-    r"^(?:ماستركارد|فيزا|بطاقة|البطاقات)\s+.+$|^(?:ميزة|كلاسيك|جولد|تيتانيوم|بلاتينم|وورلد)$",
-    re.I,
-)
-EGP_LIMIT = re.compile(r"(\d{1,3}(?:[,\.]\d{3})*)\s*جم")
-GRACE_DAYS = re.compile(r"حتي\s*(\d+)\s*يوم|حتى\s*(\d+)\s*يوم", re.I)
 GENERIC_CARD_NAV = re.compile(r"#/AR/CreditCards$|#/EN/CreditCards$", re.I)
-
-FALLBACK_CARD_CITATIONS: dict[str, Citation] = {
-    "credit_category": Citation(
-        title="بطاقات الإئتمان - البنك الأهلي المصري",
-        url='https://www.nbe.com.eg/NBE/E/#/AR/ProductCategory?inParams={"CategoryID":"CreditCardsID"}',
-    ),
-    "debit_category": Citation(
-        title="بطاقات الخصم المباشر - البنك الأهلي المصري",
-        url='https://www.nbe.com.eg/NBE/E/#/AR/ProductCategory?inParams={"CategoryID":"DepitCardsID"}',
-    ),
-    "prepaid_category": Citation(
-        title="البطاقات المدفوعة مقدماً - البنك الأهلي المصري",
-        url='https://www.nbe.com.eg/NBE/E/#/AR/ProductCategory?inParams={"CategoryID":"PrepaidCardsID"}',
-    ),
+CARD_FAMILY_LABELS = {
+    "ar": {
+        "credit": "بطاقات الائتمان",
+        "debit": "بطاقات الخصم المباشر",
+        "prepaid": "البطاقات المدفوعة مقدماً",
+    },
+    "en": {
+        "credit": "Credit cards",
+        "debit": "Debit cards",
+        "prepaid": "Prepaid cards",
+    },
 }
 
 
@@ -163,6 +63,23 @@ def _citation_priority(chunk: RetrievedChunk) -> int:
     return 0
 
 
+def _card_family(chunk: RetrievedChunk) -> str:
+    url = (chunk.url or "").lower()
+    doc_type = getattr(chunk, "doc_type", "").lower()
+    title = (chunk.title or "").lower()
+    if "prepaidcardsid" in url or "prepaid" in doc_type or "مدفوع" in title:
+        return "prepaid"
+    if "depitcardsid" in url or "debit" in doc_type or "خصم" in title:
+        return "debit"
+    if (
+        "creditcardsid" in url
+        or "credit_card" in doc_type
+        or "credit card" in title
+        or "ائتمان" in title
+    ):
+        return "credit"
+    return ""
+
 def _is_citable_card_chunk(chunk: RetrievedChunk) -> bool:
     if not chunk.url or is_broken_citation_url(chunk.url):
         return False
@@ -179,11 +96,14 @@ def build_card_citations(
     include_families: tuple[str, ...] = ("credit", "debit", "prepaid"),
     language: str = "ar",
 ) -> list[Citation]:
-    """Pick diverse official card pages instead of one generic navigation link."""
+    """Return only citations that were present in the retrieved chunks."""
     has_rich_credit_source = any("CreditCardsID" in (chunk.url or "") for chunk in chunks)
 
     ranked: list[tuple[int, float, RetrievedChunk]] = []
     for chunk in chunks:
+        family = _card_family(chunk)
+        if family and family not in include_families:
+            continue
         if not _is_citable_card_chunk(chunk):
             continue
         if language == "ar" and "/EN/" in (chunk.url or ""):
@@ -197,7 +117,6 @@ def build_card_citations(
 
     citations: list[Citation] = []
     seen_urls: set[str] = set()
-    seen_families: set[str] = set()
 
     for _, _, chunk in ranked:
         url_key = canonical_url_key(chunk.url)
@@ -213,34 +132,8 @@ def build_card_citations(
                 reranker_score=round(chunk.score, 3),
             )
         )
-        if "CreditCardsID" in chunk.url:
-            seen_families.add("credit")
-        if "DepitCardsID" in chunk.url:
-            seen_families.add("debit")
-        if "PrepaidCardsID" in chunk.url:
-            seen_families.add("prepaid")
         if len(citations) >= max_items:
             break
-
-    if "credit" in include_families:
-        has_credit_category = any(
-            "CreditCardsID" in citation.url and "ProductCategory" in citation.url
-            for citation in citations
-        )
-        if not has_credit_category:
-            fallback = FALLBACK_CARD_CITATIONS["credit_category"]
-            if canonical_url_key(fallback.url) not in seen_urls:
-                citations.insert(0, fallback)
-                seen_urls.add(canonical_url_key(fallback.url))
-                seen_families.add("credit")
-
-    for family in include_families:
-        if family not in seen_families and len(citations) < max_items:
-            fallback_key = f"{family}_category"
-            fallback = FALLBACK_CARD_CITATIONS.get(fallback_key)
-            if fallback and canonical_url_key(fallback.url) not in seen_urls:
-                citations.append(fallback)
-                seen_urls.add(canonical_url_key(fallback.url))
 
     citations = [
         citation
@@ -312,118 +205,78 @@ def prioritize_credit_card_chunks(
     return sorted(chunks, key=sort_key)
 
 
-def _enrich_product_hint(name: str, text: str, default_hint: str) -> str:
-    aliases = [part.strip() for part in re.split(r"/|،", name) if part.strip()]
-    window = ""
-    for alias in aliases:
-        if alias in text:
-            idx = text.find(alias)
-            window = text[max(0, idx - 40) : idx + 500]
-            break
-    if not window:
-        return default_hint
-    extras: list[str] = []
-    limit = EGP_LIMIT.search(window)
-    if limit:
-        extras.append(f"حد ائتماني يبدأ من {limit.group(1)} جنيه")
-    grace = GRACE_DAYS.search(window)
-    if grace:
-        days = grace.group(1) or grace.group(2)
-        extras.append(f"فترة سماح حتى {days} يوم على المشتريات")
-    if extras:
-        return f"{default_hint} ({'، '.join(extras)})"
-    return default_hint
+def _clean_source_title(title: str) -> str:
+    return re.sub(
+        r"^(?:البنك\s+الأهلى\s+(?:المصرى|المصري)|National Bank of Egypt)\s*-\s*",
+        "",
+        title.strip(),
+        flags=re.I,
+    ).strip()
+
+
+def _card_names(
+    chunks: list[RetrievedChunk],
+    language: str,
+    *,
+    family: str | None = None,
+    limit: int = 12,
+) -> list[str]:
+    names: list[str] = []
+    for chunk in chunks:
+        chunk_family = _card_family(chunk)
+        if family and chunk_family != family:
+            continue
+        if not chunk_family and getattr(chunk, "category", "") != "cards":
+            continue
+        candidate = _clean_source_title(chunk.product_name or chunk.title)
+        if not candidate:
+            continue
+        if language == "ar" and not re.search(r"[\u0600-\u06FF]", candidate):
+            continue
+        if language == "en" and re.search(r"[\u0600-\u06FF]", candidate):
+            continue
+        if candidate not in names:
+            names.append(candidate)
+    return names[:limit]
 
 
 def build_credit_cards_answer(chunks: list[RetrievedChunk], language: str) -> str | None:
-    if language != "ar":
-        return _build_credit_cards_answer_en(chunks)
-
-    source = _credit_card_chunks(chunks) or chunks[:8]
-    combined = "\n".join(chunk.text for chunk in source[:8])
-
-    lines = [
-        "يوفّر البنك الأهلي المصري مجموعة واسعة من بطاقات الائتمان ضمن فئات مختلفة حسب احتياجات العميل وملاءته المالية:",
-        "",
-    ]
-    for tier_name, products in CREDIT_CARD_TIERS:
-        lines.append(f"{tier_name}:")
-        for product_name, hint in products:
-            detail = _enrich_product_hint(product_name, combined, hint)
-            lines.append(f"• {product_name}: {detail}")
-        lines.append("")
-
-    lines.append("مزايا مشتركة لبطاقات الائتمان:")
-    for feature in SHARED_CREDIT_FEATURES:
-        lines.append(f"• {feature}")
-
-    lines.append(
-        "\nللمقارنة بين البطاقات أو طلب إصدار بطاقة، راجع صفحة بطاقات الائتمان على موقع البنك الأهلي أو تواصل مع أقرب فرع / خدمة الأهلي فون 19623."
-    )
-    return "\n".join(lines)
-
-
-def _build_credit_cards_answer_en(chunks: list[RetrievedChunk]) -> str | None:
+    names = _card_names(_credit_card_chunks(chunks), language, family="credit")
+    if not names:
+        return None
+    bullet = "\n• ".join(names)
+    if language == "ar":
+        return (
+            "وفقاً للمستندات المسترجعة، بطاقات الائتمان المطابقة تشمل:\n"
+            f"• {bullet}\n"
+            "لم تُضف أي مزايا أو حدود غير موجودة في هذه المصادر."
+        )
     return (
-        "NBE offers multiple credit card tiers: entry cards (Visa Classic, Mastercard Standard), "
-        "mid-tier (Visa Gold, Titanium), and premium cards (Platinum, World, Signature, Infinite). "
-        "Benefits include Al Ahly Points, installment plans, OTP secure online shopping, and multiple repayment channels. "
-        "See nbe.com.eg cards section or visit a branch for details."
+        "According to the retrieved documents, matching credit card pages include:\n"
+        f"• {bullet}\n"
+        "No benefits or limits were added beyond those sources."
     )
-
-
-def _collect_products_from_text(text: str, defaults: list[str]) -> list[str]:
-    found: list[str] = []
-    for line in text.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or len(line) < 3:
-            continue
-        if PRODUCT_LINE.match(line) and line not in found:
-            found.append(line)
-    return found or defaults
 
 
 def build_card_types_answer(chunks: list[RetrievedChunk], language: str) -> str | None:
-    if language != "ar":
-        return _build_card_types_answer_en(chunks)
-
     sections: list[str] = []
-    card_chunks = [
-        chunk
-        for chunk in chunks
-        if "بطاق" in (chunk.title or "") or "card" in (chunk.url or "").lower()
-    ]
-    source = card_chunks or chunks[:8]
-    combined = "\n".join(f"{chunk.title}\n{chunk.url}\n{chunk.text}" for chunk in source[:8])
+    labels = CARD_FAMILY_LABELS[language]
+    for family in ("credit", "debit", "prepaid"):
+        names = _card_names(chunks, language, family=family)
+        if names:
+            bullet = "\n  • ".join(names)
+            sections.append(f"• {labels[family]}:\n  • {bullet}")
 
-    for pattern, category, defaults in CARD_CATEGORY_MARKERS:
-        if pattern.search(combined):
-            category_text = "\n".join(
-                chunk.text
-                for chunk in source
-                if pattern.search(f"{chunk.title} {chunk.url} {chunk.text}")
-            )
-            products = _collect_products_from_text(category_text, defaults)
-        else:
-            products = defaults
-        bullet = "\n  • ".join(products)
-        sections.append(f"• {category}:\n  • {bullet}")
-
+    if not sections:
+        return None
+    if language == "ar":
+        return (
+            "وفقاً للمستندات المسترجعة، صفحات البطاقات المطابقة تشمل:\n"
+            + "\n".join(sections)
+            + "\nالتفاصيل مقتصرة على المنتجات التي ظهرت في نتائج البحث."
+        )
     return (
-        "وفقاً لمحتوى موقع البنك الأهلي المصري، أنواع البطاقات البنكية المتاحة تشمل:\n"
+        "According to the retrieved documents, matching card pages include:\n"
         + "\n".join(sections)
-        + "\n\nلتفاصيل كل بطاقة أو طلب الإصدار، راجع قسم البطاقات على موقع البنك أو أقرب فرع."
-    )
-
-
-def _build_card_types_answer_en(chunks: list[RetrievedChunk]) -> str | None:
-    sections = [
-        "• Credit cards: Visa Classic, Visa Gold, Visa Platinum, Mastercard Standard, and more",
-        "• Debit cards: Meeza, Classic, Gold, Titanium, Platinum, World, World Elite",
-        "• Prepaid cards: Meeza prepaid and university prepaid cards",
-    ]
-    return (
-        "According to NBE website content, available bank card types include:\n"
-        + "\n".join(sections)
-        + "\nSee the cards section on nbe.com.eg or visit a branch for details."
+        + "\nDetails are limited to products present in the retrieval results."
     )
