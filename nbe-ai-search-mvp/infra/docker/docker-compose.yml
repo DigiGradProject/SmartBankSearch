@@ -11,8 +11,8 @@ services:
       - OLLAMA_MODEL_TIER2=qwen3:14b
       - EMBEDDING_MODEL=BAAI/bge-m3
       - RERANKER_MODEL=BAAI/bge-reranker-v2-m3
-      - CHROMA_COLLECTION=nbe_chunks_bge_m3_v6
-      - SEMANTIC_CACHE_COLLECTION=nbe_semantic_cache_v7
+      - CHROMA_COLLECTION=nbe_chunks_bge_m3_v7
+      - SEMANTIC_CACHE_COLLECTION=nbe_semantic_cache_v8
       - SCRAPE_ROOT=/data/nbe_complete_scrape
     volumes:
       - ../../data:/app/data

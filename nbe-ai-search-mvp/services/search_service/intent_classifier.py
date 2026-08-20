@@ -130,8 +130,14 @@ INTENT_RULES: list[IntentRule] = [
         patterns_ar=(
             _ar(r"(شراء|اشتري|اشترى).{0,20}شهاد"),
             _ar(r"عا[يو]ز.{0,30}(شراء|اشتري).{0,20}شهاد"),
+            _ar(r"(عا[يو]ز|اريد|محتاج).{0,30}(استثمر|استثمار)"),
+            _ar(r"(استثمر|استثمار).{0,30}(فلوس|اموال|نقود)"),
+            _ar(r"(معايا|عندي|لدي).{0,35}(فلوس|اموال|نقود|\d+\s*(جنيه|جنيهات)).{0,55}(استثمر|استثمار|ارباح|تزود|ازود)"),
         ),
-        patterns_en=(_en(r"buy.{0,20}certificate"),),
+        patterns_en=(
+            _en(r"buy.{0,20}certificate"),
+            _en(r"(?:want|need|looking).{0,30}(?:invest|investment)"),
+        ),
         expand_ar="شراء شهادة شهادات ادخار CertificatesID",
         expand_en="buy certificate savings",
     ),

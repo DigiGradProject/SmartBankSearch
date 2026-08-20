@@ -80,7 +80,7 @@ def run_ingestion(source: str = "documents_json", limit: int | None = None) -> I
         status.chunks_upserted = upserted_total
         status.chunks_skipped = skipped_total
         status.errors = errors
-        status.status = "completed" if not errors else "completed"
+        status.status = "completed" if not errors else "failed"
         status.finished_at = datetime.now(UTC)
         logger.info(
             "ingestion_completed",

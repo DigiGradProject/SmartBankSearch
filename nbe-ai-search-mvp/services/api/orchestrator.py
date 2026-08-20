@@ -24,6 +24,7 @@ from services.search_service.card_catalog import (
     is_credit_cards_overview_query,
 )
 from services.search_service.certificate_catalog import (
+    build_certificate_buy_answer,
     build_certificate_types_answer,
     is_certificate_types_query,
 )
@@ -372,6 +373,22 @@ class Orchestrator:
                     )
                 )
 
+        if "certificate_buy" in retrieval.intent.split("+"):
+            buy_answer = build_certificate_buy_answer(retrieval.chunks, retrieval.language)
+            if buy_answer:
+                built = self.context_builder.build(retrieval.query, retrieval.chunks)
+                return _finalize(
+                    SearchResponse(
+                        answer=buy_answer,
+                        confidence=round(max(0.72, retrieval.confidence * 0.85), 3),
+                        confidence_reason=retrieval.confidence_reason,
+                        citations=built.citations,
+                        answered=True,
+                        language=retrieval.language,  # type: ignore[arg-type]
+                        suggestions=suggestions,
+                    )
+                )
+
         if is_card_types_query(retrieval.query, retrieval.language):
             card_answer = build_card_types_answer(retrieval.chunks, retrieval.language)
             if card_answer:
@@ -512,6 +529,12 @@ class Orchestrator:
                         language=retrieval.language,
                     )
                     faithfulness_label = recheck.label.value
+                    if recheck.should_regenerate:
+                        answer = ""
+                else:
+                    # Never publish the original answer when the strict
+                    # regeneration itself failed.
+                    answer = ""
 
         if not answer:
             return _finalize(

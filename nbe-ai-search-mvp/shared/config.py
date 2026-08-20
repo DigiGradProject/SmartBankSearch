@@ -13,11 +13,13 @@ class Settings(BaseSettings):
     project_root: Path = Path(__file__).resolve().parents[1]
     documents_path: Path = project_root / "data" / "documents.json"
     cleaned_jsonl_path: Path = project_root.parent / "nbe-scrape-cleaner" / "output" / "documents.jsonl"
-    rescrape_json_path: Path = project_root.parent / "output"
+    rescrape_json_path: Path = (
+        project_root.parent / "nbe-scrape-cleaner" / "output" / "pages"
+    )
     scrape_root: Path = project_root.parent / "nbe_complete_scrape"
     chroma_path: Path = project_root / "data" / "chroma"
     # Bump when corpus schema/content changes materially.
-    chroma_collection: str = "nbe_chunks_bge_m3_v6"
+    chroma_collection: str = "nbe_chunks_bge_m3_v7"
     intent_filter_confidence: float = 0.75
     intent_filter_enabled: bool = True
     # Staged metadata filter (analysis.md Phase A/B)
@@ -89,7 +91,7 @@ class Settings(BaseSettings):
 
     # Semantic cache (Chroma similarity)
     semantic_cache_enabled: bool = True
-    semantic_cache_collection: str = "nbe_semantic_cache_v7"
+    semantic_cache_collection: str = "nbe_semantic_cache_v8"
     semantic_cache_threshold: float = 0.95
     semantic_cache_ttl_seconds: int = 86400
 

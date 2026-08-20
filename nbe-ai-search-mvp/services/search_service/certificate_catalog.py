@@ -79,3 +79,33 @@ def build_certificate_types_answer(
         f"• {bullet}\n"
         "The answer is limited to these retrieved sources."
     )
+
+
+def build_certificate_buy_answer(
+    chunks: list[RetrievedChunk],
+    language: str,
+) -> str | None:
+    """Offer grounded certificate choices without making financial advice."""
+    if not chunks:
+        return None
+
+    names = _certificate_names(chunks, language)
+    if not names:
+        return None
+
+    bullet = "\n• ".join(names[:5])
+    if language == "ar":
+        return (
+            "لو هدفك استثمار المبلغ في شهادة من البنك الأهلي المصري، "
+            "فالنتائج المتاحة تشمل:\n"
+            f"• {bullet}\n"
+            "راجع صفحة كل شهادة وقارن مدة الشهادة والعائد ودورية صرفه، "
+            "ثم افتح صفحة المنتج المناسبة لمعرفة التفاصيل وخطوات الشراء."
+        )
+
+    return (
+        "If you want to invest the amount in an NBE certificate, the available results include:\n"
+        f"• {bullet}\n"
+        "Review each certificate page and compare its term, yield, and payout frequency, "
+        "then open the matching product page for details and purchase steps."
+    )

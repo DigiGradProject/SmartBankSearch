@@ -44,6 +44,15 @@ def _distinct_intents(parts: list[str], language: str) -> list[tuple[str, str]]:
         if len(text) < 4:
             continue
         intent = classify_with_fallback(text, language)
+        # Do not turn a weak semantic guess from a sentence fragment into a
+        # separate retrieval branch. Colloquial Arabic commonly uses an
+        # attached conjunction (for example, "وعايز"), and the text before
+        # it may be too vague to carry an intent on its own.
+        if (
+            intent.source == "semantic"
+            and intent.confidence < settings.semantic_intent_regex_fallback_threshold
+        ):
+            continue
         if intent.intent in seen:
             continue
         if intent.intent == "general_faq" and out:
