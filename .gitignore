@@ -62,6 +62,8 @@ nbe-scrape-cleaner/output/*.jsonl
 nbe-scrape-cleaner/output/*.json
 nbe-scrape-cleaner/output/*.md
 !nbe-scrape-cleaner/output/.gitkeep
+!nbe-scrape-cleaner/output/documents.jsonl
+!nbe-scrape-cleaner/output/rescrape_report.md
 
 # --- Logs & temp ---
 *.log
