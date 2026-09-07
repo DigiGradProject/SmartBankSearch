@@ -42,6 +42,20 @@ type AutocompleteResponse = {
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 const AUTOCOMPLETE_DEBOUNCE_MS = 250;
 
+const DEFAULT_SUGGESTIONS_EN: SearchSuggestion[] = [
+  { query: "How can I open a current account?", label: "Open a current account" },
+  { query: "What are the requirements for a personal loan?", label: "Personal loan requirements" },
+  { query: "How can I activate my debit card?", label: "Activate a debit card" },
+  { query: "What are NBE mortgage finance options?", label: "Mortgage finance options" },
+];
+
+const DEFAULT_SUGGESTIONS_AR: SearchSuggestion[] = [
+  { query: "ما هي شروط فتح حساب جاري؟", label: "شروط فتح حساب جاري" },
+  { query: "ما هي شروط الحصول على قرض شخصي؟", label: "شروط القرض الشخصي" },
+  { query: "كيف يمكنني تفعيل بطاقة الخصم المباشر؟", label: "تفعيل بطاقة الخصم المباشر" },
+  { query: "ما هي خيارات التمويل العقاري؟", label: "خيارات التمويل العقاري" },
+];
+
 export default function App() {
   const [mode, setMode] = useState<SearchMode>("ai");
   const [query, setQuery] = useState("");
@@ -51,12 +65,19 @@ export default function App() {
   const [autocompleteItems, setAutocompleteItems] = useState<SearchSuggestion[]>([]);
   const [showAutocomplete, setShowAutocomplete] = useState(false);
   const [activeSuggestion, setActiveSuggestion] = useState(-1);
+  const [lastSubmittedQuery, setLastSubmittedQuery] = useState("");
   const blurTimeoutRef = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const [feedbackSent, setFeedbackSent] = useState<"helpful" | "not_helpful" | null>(null);
 
   const isArabic = useMemo(() => /[\u0600-\u06FF]/.test(query), [query]);
+  const quickSuggestions = useMemo(
+    () => autocompleteItems.slice(0, 6).length > 0
+      ? autocompleteItems.slice(0, 6)
+      : (isArabic ? DEFAULT_SUGGESTIONS_AR : DEFAULT_SUGGESTIONS_EN),
+    [autocompleteItems, isArabic],
+  );
 
   async function sendFeedback(vote: "helpful" | "not_helpful") {
     if (!result?.query_hash || feedbackSent) return;
@@ -121,6 +142,7 @@ export default function App() {
     setError(null);
     setResult(null);
     setFeedbackSent(null);
+    setLastSubmittedQuery(searchQuery);
     setShowAutocomplete(false);
 
     try {
@@ -135,8 +157,8 @@ export default function App() {
       const payload = (await response.json()) as SearchResponse;
       setResult(payload);
       setQuery(searchQuery);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unexpected error");
+    } catch {
+      setError(isArabic ? "حدث خطأ ما. يرجى إعادة المحاولة." : "Something went wrong. Please try your search again.");
     } finally {
       setLoading(false);
     }
@@ -208,35 +230,54 @@ export default function App() {
   }
 
   return (
-    <div className="page" dir={isArabic ? "rtl" : "ltr"}>
-      <header className="hero">
-        <p className="eyebrow">National Bank of Egypt</p>
-        <h1>AI Search MVP</h1>
-        <p className="subtitle">
-          Bilingual semantic search with grounded answers and source citations.
-        </p>
-      </header>
+    <main className="page" dir={isArabic ? "rtl" : "ltr"}>
+      <section className="ai-search-card" aria-labelledby="ai-search-title">
+        <div className="card-accent card-accent-top" aria-hidden="true" />
+        <div className="card-accent card-accent-bottom" aria-hidden="true" />
 
-      <section className="panel">
+        <header className="search-header">
+          <div className="search-brand-mark" aria-hidden="true">
+            <span>✦</span>
+          </div>
+          <div>
+            <p className="eyebrow">National Bank of Egypt</p>
+            <h1 id="ai-search-title">AI Search</h1>
+            <p className="subtitle">
+              {isArabic ? "اعثر على إجابات من المعلومات الرسمية للبنك الأهلي المصري" : "Find answers from NBE's official information"}
+            </p>
+          </div>
+          <div className="trusted-badge">
+            <span className="trusted-dot" aria-hidden="true" />
+            <span>{isArabic ? "مصدر رسمي" : "Official source"}</span>
+          </div>
+        </header>
+
         <div className="mode-toggle" role="tablist" aria-label="Search mode">
           <button
             type="button"
-            className={mode === "traditional" ? "active" : ""}
-            onClick={() => setMode("traditional")}
-          >
-            Traditional Search
-          </button>
-          <button
-            type="button"
+            role="tab"
+            aria-selected={mode === "ai"}
             className={mode === "ai" ? "active" : ""}
             onClick={() => setMode("ai")}
           >
-            AI Search Mode
+            <span className="mode-icon" aria-hidden="true">✦</span>
+            <span>AI Search Mode</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "traditional"}
+            className={mode === "traditional" ? "active" : ""}
+            onClick={() => setMode("traditional")}
+          >
+            <span className="mode-icon" aria-hidden="true">⌕</span>
+            <span>Traditional Search</span>
           </button>
         </div>
 
         <form onSubmit={handleSearch} className="search-form">
           <div className="search-input-wrap">
+            <span className="input-icon" aria-hidden="true">✧</span>
             <input
               ref={inputRef}
               value={query}
@@ -247,12 +288,19 @@ export default function App() {
               onFocus={handleInputFocus}
               onBlur={handleInputBlur}
               onKeyDown={handleInputKeyDown}
-              placeholder={isArabic ? "اكتب سؤالك هنا..." : "Ask a question about NBE services..."}
+              placeholder={isArabic
+                ? "اسأل عن منتجات وخدمات وحسابات وبطاقات وقروض البنك الأهلي المصري..."
+                : "Ask about NBE products, services, accounts, cards, loans..."}
               autoComplete="off"
+              aria-label={isArabic ? "اسأل عن البنك الأهلي المصري" : "Ask about NBE"}
               aria-autocomplete="list"
               aria-expanded={showAutocomplete && autocompleteItems.length > 0}
               aria-controls="search-autocomplete"
             />
+            <button className="search-submit" type="submit" disabled={loading || !query.trim()}>
+              <span aria-hidden="true">⌕</span>
+              <span>{loading ? (isArabic ? "جارٍ البحث" : "Searching") : (isArabic ? "بحث" : "Search")}</span>
+            </button>
             {mode === "ai" && showAutocomplete && autocompleteItems.length > 0 && (
               <ul id="search-autocomplete" className="autocomplete-list" role="listbox">
                 {autocompleteItems.map((item, index) => (
@@ -263,6 +311,7 @@ export default function App() {
                       onMouseDown={(event) => event.preventDefault()}
                       onClick={() => selectSuggestion(item)}
                     >
+                      <span className="autocomplete-leading" aria-hidden="true">⌕</span>
                       <span className="autocomplete-label">{item.label}</span>
                       {item.reason === "popular" && (
                         <span className="autocomplete-badge">
@@ -275,53 +324,94 @@ export default function App() {
               </ul>
             )}
           </div>
-          <button type="submit" disabled={loading || !query.trim()}>
-            {loading ? "Searching..." : "Search"}
-          </button>
         </form>
 
-        {mode === "ai" && !query.trim() && autocompleteItems.length > 0 && (
-          <div className="quick-suggestions">
-            <h4>{isArabic ? "اقتراحات سريعة" : "Quick suggestions"}</h4>
+        {mode === "ai" && !query.trim() && (
+          <section className="suggestions" aria-labelledby="popular-searches-title">
+            <div className="section-heading">
+              <span className="section-icon" aria-hidden="true">◷</span>
+              <h2 id="popular-searches-title">{isArabic ? "عمليات البحث الشائعة" : "Popular searches"}</h2>
+            </div>
             <div className="suggestion-list">
-              {autocompleteItems.slice(0, 6).map((item) => (
+              {quickSuggestions.map((item) => (
                 <button
                   key={`quick-${item.query}`}
                   type="button"
                   className="suggestion-chip"
                   onClick={() => selectSuggestion(item)}
                 >
-                  {item.label}
+                  <span>{item.label}</span>
+                  <span className="chip-arrow" aria-hidden="true">↗</span>
                 </button>
               ))}
+            </div>
+          </section>
+        )}
+
+        {loading && (
+          <div className="loading-state" role="status" aria-live="polite">
+            <span className="loading-orb" aria-hidden="true">✦</span>
+            <div>
+              <strong>{isArabic ? "جارٍ البحث في معلومات البنك الأهلي المصري" : "AI is searching NBE information"}</strong>
+              <span className="loading-dots" aria-hidden="true"><i /> <i /> <i /></span>
             </div>
           </div>
         )}
 
-        {error && <div className="alert error">{error}</div>}
+        {error && !loading && (
+          <div className="error-state" role="alert">
+            <div className="state-icon" aria-hidden="true">!</div>
+            <div>
+              <strong>{isArabic ? "حدث خطأ ما" : "Something went wrong"}</strong>
+              <p>{error}</p>
+            </div>
+            <button type="button" className="retry-button" onClick={() => void runSearch(lastSubmittedQuery || query)}>
+              {isArabic ? "إعادة المحاولة" : "Try again"}
+            </button>
+          </div>
+        )}
 
-        {result && (
-          <article className="result">
+        {result && !loading && (
+          <article className="result" aria-live="polite">
             {result.answered ? (
               <>
-                <div className="meta">
-                  <span>Confidence: {(result.confidence * 100).toFixed(0)}%</span>
-                  {result.language && <span>Language: {result.language.toUpperCase()}</span>}
-                  {result.cache_hit && <span>{isArabic ? "من الذاكرة" : "Cached"}</span>}
+                <div className="result-heading">
+                  <div>
+                    <span className="result-kicker">{isArabic ? "إجابة الذكاء الاصطناعي" : "AI Answer"}</span>
+                    <h2>{isArabic ? "إليك ما وجدناه" : "Here is what we found"}</h2>
+                  </div>
+                  <div className="result-meta" aria-label="Answer details">
+                    <span className="confidence-pill">{Math.round(result.confidence * 100)}% {isArabic ? "ثقة" : "confidence"}</span>
+                    {result.language && <span>{result.language.toUpperCase()}</span>}
+                    {result.cache_hit && <span>{isArabic ? "من الذاكرة" : "Cached"}</span>}
+                  </div>
                 </div>
                 {result.confidence_reason && (
                   <p className="confidence-reason">{result.confidence_reason}</p>
                 )}
-                <p className="answer">{result.answer}</p>
+                <div className="answer" dir={result.language === "ar" || isArabic ? "rtl" : "ltr"}>
+                  {result.answer}
+                </div>
                 {result.citations.length > 0 && (
-                  <div className="citations">
-                    <h3>Sources</h3>
-                    <ul>
+                  <section className="citations" aria-labelledby="sources-title">
+                    <div className="section-heading">
+                      <span className="section-icon" aria-hidden="true">✓</span>
+                      <h3 id="sources-title">{isArabic ? "المصادر" : "Sources"}</h3>
+                    </div>
+                    <div className="citation-list">
                       {result.citations.map((citation) => (
-                        <li key={citation.url}>
-                          <a href={citation.url} target="_blank" rel="noreferrer">
-                            {citation.title}
-                          </a>
+                        <a
+                          className="citation-card"
+                          key={citation.url}
+                          href={citation.url}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <span className="citation-icon" aria-hidden="true">↗</span>
+                          <span className="citation-copy">
+                            <strong>{citation.title}</strong>
+                            <span>{isArabic ? "الموقع الرسمي للبنك الأهلي المصري" : "Official NBE website"}</span>
+                          </span>
                           {(citation.relevance_score != null || citation.category) && (
                             <span className="citation-meta">
                               {citation.category ? `${citation.category} · ` : ""}
@@ -330,13 +420,13 @@ export default function App() {
                                 : ""}
                             </span>
                           )}
-                        </li>
+                        </a>
                       ))}
-                    </ul>
-                  </div>
+                    </div>
+                  </section>
                 )}
                 <div className="feedback-row">
-                  <span>{isArabic ? "هل كانت الإجابة مفيدة؟" : "Was this helpful?"}</span>
+                  <span>{isArabic ? "هل كانت الإجابة مفيدة؟" : "Was this answer helpful?"}</span>
                   <button
                     type="button"
                     className={feedbackSent === "helpful" ? "active" : ""}
@@ -344,7 +434,8 @@ export default function App() {
                     onClick={() => sendFeedback("helpful")}
                     aria-label="Helpful"
                   >
-                    👍
+                    <span aria-hidden="true">👍</span>
+                    <span>{isArabic ? "مفيدة" : "Helpful"}</span>
                   </button>
                   <button
                     type="button"
@@ -353,7 +444,8 @@ export default function App() {
                     onClick={() => sendFeedback("not_helpful")}
                     aria-label="Not helpful"
                   >
-                    👎
+                    <span aria-hidden="true">👎</span>
+                    <span>{isArabic ? "غير مفيدة" : "Not helpful"}</span>
                   </button>
                   {feedbackSent && (
                     <span className="feedback-thanks">
@@ -364,52 +456,58 @@ export default function App() {
               </>
             ) : (
               <div className="no-answer">
-                <h3>
-                  {result.guidance && /عائد|فائدة|فائده|yield|لا تتوفر نسبة|غير متوفرة كرقم/i.test(result.guidance)
-                    ? (isArabic ? "النسبة غير متوفرة في الفهرس" : "Rate not in indexed content")
-                    : (isArabic ? "لم نجد إجابة مؤكدة" : "No confident answer found")}
-                </h3>
-                <p>{result.guidance || (isArabic
-                  ? "جرّب أحد الاقتراحات التالية أو أعد صياغة سؤالك."
-                  : "Try one of the suggestions below or rephrase your question.")}</p>
-                {result.abstention_reason &&
-                  !/^(insufficient_context|rate_not_in_index)$/.test(result.abstention_reason) && (
-                  <p className="reason">Reason: {result.abstention_reason}</p>
-                )}
-                {result.suggestions && result.suggestions.length > 0 && (
-                  <div className="suggestions">
-                    <h4>{isArabic ? "صفحات ومواضيع مقترحة" : "Suggested pages and topics"}</h4>
-                    <div className="suggestion-list">
-                      {result.suggestions.map((item) => (
-                        item.url ? (
-                          <a
-                            key={`${item.query}-${item.label}`}
-                            className="suggestion-chip suggestion-link"
-                            href={item.url}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            {item.label}
-                          </a>
-                        ) : (
-                          <button
-                            key={`${item.query}-${item.label}`}
-                            type="button"
-                            className="suggestion-chip"
-                            onClick={() => runSearch(item.query)}
-                          >
-                            {item.label}
-                          </button>
-                        )
-                      ))}
+                <div className="state-icon" aria-hidden="true">?</div>
+                <div>
+                  <h2>
+                    {result.guidance && /عائد|فائدة|فائده|yield|لا تتوفر نسبة|غير متوفرة كرقم/i.test(result.guidance)
+                      ? (isArabic ? "النسبة غير متوفرة في الفهرس" : "Rate not in indexed content")
+                      : (isArabic ? "لم نجد إجابة مؤكدة" : "No confident answer found")}
+                  </h2>
+                  <p>{result.guidance || (isArabic
+                    ? "جرّب أحد الاقتراحات التالية أو أعد صياغة سؤالك."
+                    : "Try one of the suggestions below or rephrase your question.")}</p>
+                  {result.abstention_reason &&
+                    !/^(insufficient_context|rate_not_in_index)$/.test(result.abstention_reason) && (
+                    <p className="reason">Reason: {result.abstention_reason}</p>
+                  )}
+                  {result.suggestions && result.suggestions.length > 0 && (
+                    <div className="suggestions">
+                      <div className="section-heading">
+                        <span className="section-icon" aria-hidden="true">⌕</span>
+                        <h3>{isArabic ? "صفحات ومواضيع مقترحة" : "Suggested pages and topics"}</h3>
+                      </div>
+                      <div className="suggestion-list">
+                        {result.suggestions.map((item) => (
+                          item.url ? (
+                            <a
+                              key={`${item.query}-${item.label}`}
+                              className="suggestion-chip suggestion-link"
+                              href={item.url}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              {item.label}
+                            </a>
+                          ) : (
+                            <button
+                              key={`${item.query}-${item.label}`}
+                              type="button"
+                              className="suggestion-chip"
+                              onClick={() => runSearch(item.query)}
+                            >
+                              {item.label}
+                            </button>
+                          )
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             )}
           </article>
         )}
       </section>
-    </div>
+    </main>
   );
 }
