@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NBE Curated Document Corpus",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["id", "title", "url", "language", "content", "metadata"],
+    "properties": {
+      "id": {"type": "string", "minLength": 1},
+      "title": {"type": "string", "minLength": 1},
+      "url": {"type": "string", "format": "uri"},
+      "language": {"enum": ["ar", "en"]},
+      "content": {"type": "string", "minLength": 1},
+      "metadata": {
+        "type": "object",
+        "required": [
+          "source",
+          "is_stub",
+          "curated_version",
+          "reviewed_at",
+          "valid_until",
+          "status",
+          "doc_type",
+          "category"
+        ],
+        "properties": {
+          "source": {"const": "curated_document"},
+          "is_stub": {"type": "boolean"},
+          "curated_version": {"type": "string", "minLength": 1},
+          "reviewed_at": {"type": "string", "format": "date"},
+          "valid_until": {"type": "string", "format": "date"},
+          "status": {"enum": ["approved", "retired"]},
+          "doc_type": {"type": "string", "minLength": 1},
+          "category": {"type": "string", "minLength": 1}
+        },
+        "additionalProperties": true
+      }
+    },
+    "additionalProperties": false
+  }
+}

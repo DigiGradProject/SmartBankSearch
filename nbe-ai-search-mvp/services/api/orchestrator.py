@@ -24,6 +24,7 @@ from services.search_service.card_catalog import (
     is_credit_cards_overview_query,
 )
 from services.search_service.certificate_catalog import (
+    build_certificate_buy_answer,
     build_certificate_types_answer,
     is_certificate_types_query,
 )
@@ -33,7 +34,6 @@ from services.search_service.rate_guidance import (
     context_has_applicable_rate,
     is_rate_query,
     rate_answer,
-    rate_citations,
     rate_guidance,
 )
 from services.search_service.search import RetrievalResult, SearchService
@@ -64,6 +64,20 @@ class QueryCache:
         self._store[key] = (time.time() + ttl_seconds, payload)
 
 
+def _cached_response_is_supported(
+    response: SearchResponse,
+    retrieval: RetrievalResult,
+) -> bool:
+    """Accept cached answers only when current retrieval supports a cited URL."""
+    current_urls = {canonical_url_key(chunk.url) for chunk in retrieval.chunks if chunk.url}
+    cached_urls = {
+        canonical_url_key(citation.url)
+        for citation in response.citations
+        if citation.url
+    }
+    return bool(current_urls & cached_urls)
+
+
 def merge_retrieval_results(results: list[RetrievalResult]) -> RetrievalResult:
     """Merge multi-intent retrieval into one result (best score per URL)."""
     if len(results) == 1:
@@ -86,8 +100,11 @@ def merge_retrieval_results(results: list[RetrievalResult]) -> RetrievalResult:
         language=primary.language,
         chunks=merged_chunks[: settings.rerank_keep_size * 2],
         confidence=conf,
-        should_answer=any(r.should_answer for r in results),
-        abstention_reason=None if any(r.should_answer for r in results) else primary.abstention_reason,
+        should_answer=bool(results) and all(r.should_answer for r in results),
+        abstention_reason=next(
+            (r.abstention_reason for r in results if not r.should_answer),
+            None,
+        ),
         intent=intents,
         category=primary.category,
         intent_confidence=max(r.intent_confidence for r in results),
@@ -240,27 +257,6 @@ class Orchestrator:
         llm_ms = 0.0
         cache_hit = False
 
-        if settings.cache_enabled:
-            cached = self.cache.get(cache_key, settings.cache_ttl_seconds)
-            if cached:
-                response = SearchResponse.model_validate(cached)
-                response.cache_hit = True
-                return response
-
-        semantic = self._get_semantic_cache()
-        if semantic:
-            from services.rag.language import detect_language
-
-            cache_language = detect_language(query, language)
-            hit = semantic.lookup(query, cache_language)
-            if hit:
-                response = SearchResponse.model_validate(hit.payload)
-                response.cache_hit = True
-                cache_hit = True
-                SEMANTIC_CACHE_HITS.inc()
-                logger.info("search_semantic_cache_hit", similarity=hit.similarity)
-                return response
-
         plan = plan_query(query, language)
         retrieval = self._retrieve_planned(plan)
         if retrieval.retrieve_ms:
@@ -269,6 +265,7 @@ class Orchestrator:
             RERANK_LATENCY.observe(retrieval.rerank_ms / 1000.0)
         suggestions = build_suggestions(retrieval.query, retrieval.language, retrieval.chunks)
         understanding = retrieval.understand or plan.subqueries[0].understanding
+        semantic: SemanticCache | None = None
 
         def _finalize(
             response: SearchResponse,
@@ -302,16 +299,63 @@ class Orchestrator:
                 total_ms=total_ms,
                 cache_hit=cache_hit,
             )
-            if response.answered and semantic:
+            if response.answered and semantic and not cache_hit:
                 semantic.store(
                     query,
                     retrieval.language,
                     response.model_dump(),
                     retrieved_urls=[c.url for c in retrieval.chunks if c.url],
                 )
-            if settings.cache_enabled and response.answered:
+            if settings.cache_enabled and response.answered and not cache_hit:
                 self.cache.set(cache_key, response.model_dump(), settings.cache_ttl_seconds)
             return response
+
+        # Reliability boundary: no cache or answer builder may bypass the
+        # current retrieval decision.
+        if not retrieval.should_answer:
+            return _finalize(
+                SearchResponse(
+                    answer=None,
+                    confidence=retrieval.confidence,
+                    confidence_reason=retrieval.confidence_reason,
+                    citations=[],
+                    answered=False,
+                    language=retrieval.language,  # type: ignore[arg-type]
+                    abstention_reason=retrieval.abstention_reason,
+                    suggestions=suggestions,
+                    guidance=self._guidance_message(
+                        retrieval.query,
+                        retrieval.language,
+                        suggestions,
+                        retrieval.abstention_reason,
+                    ),
+                )
+            )
+
+        if settings.cache_enabled:
+            cached = self.cache.get(cache_key, settings.cache_ttl_seconds)
+            if cached:
+                response = SearchResponse.model_validate(cached)
+                if _cached_response_is_supported(response, retrieval):
+                    cache_hit = True
+                    return _finalize(response)
+                logger.info("search_exact_cache_rejected", reason="retrieval_source_mismatch")
+
+        semantic = self._get_semantic_cache()
+        if semantic:
+            hit = semantic.lookup(query, retrieval.language)
+            if hit:
+                response = SearchResponse.model_validate(hit.payload)
+                if _cached_response_is_supported(response, retrieval):
+                    cache_hit = True
+                    SEMANTIC_CACHE_HITS.inc()
+                    logger.info("search_semantic_cache_hit", similarity=hit.similarity)
+                    return _finalize(response)
+                logger.info(
+                    "search_semantic_cache_rejected",
+                    similarity=hit.similarity,
+                    reason="retrieval_source_mismatch",
+                )
 
         if is_certificate_types_query(retrieval.query, retrieval.language):
             catalog_answer = build_certificate_types_answer(retrieval.chunks, retrieval.language)
@@ -320,6 +364,22 @@ class Orchestrator:
                 return _finalize(
                     SearchResponse(
                         answer=catalog_answer,
+                        confidence=round(max(0.72, retrieval.confidence * 0.85), 3),
+                        confidence_reason=retrieval.confidence_reason,
+                        citations=built.citations,
+                        answered=True,
+                        language=retrieval.language,  # type: ignore[arg-type]
+                        suggestions=suggestions,
+                    )
+                )
+
+        if "certificate_buy" in retrieval.intent.split("+"):
+            buy_answer = build_certificate_buy_answer(retrieval.chunks, retrieval.language)
+            if buy_answer:
+                built = self.context_builder.build(retrieval.query, retrieval.chunks)
+                return _finalize(
+                    SearchResponse(
+                        answer=buy_answer,
                         confidence=round(max(0.72, retrieval.confidence * 0.85), 3),
                         confidence_reason=retrieval.confidence_reason,
                         citations=built.citations,
@@ -368,26 +428,6 @@ class Orchestrator:
                     )
                 )
 
-        if not retrieval.should_answer:
-            return _finalize(
-                SearchResponse(
-                    answer=None,
-                    confidence=retrieval.confidence,
-                    confidence_reason=retrieval.confidence_reason,
-                    citations=[],
-                    answered=False,
-                    language=retrieval.language,  # type: ignore[arg-type]
-                    abstention_reason=retrieval.abstention_reason,
-                    suggestions=suggestions,
-                    guidance=self._guidance_message(
-                        retrieval.query,
-                        retrieval.language,
-                        suggestions,
-                        retrieval.abstention_reason,
-                    ),
-                )
-            )
-
         built = self.context_builder.build(retrieval.query, retrieval.chunks)
         if not built.context_text:
             return _finalize(
@@ -434,17 +474,17 @@ class Orchestrator:
         if is_rate_query(retrieval.query, retrieval.language) and not context_has_applicable_rate(
             retrieval.query, retrieval.language, built.context_text
         ):
-            answer = rate_answer(retrieval.query, retrieval.language)
-            citations = rate_citations(retrieval.query, retrieval.language)
             return _finalize(
                 SearchResponse(
-                    answer=answer,
-                    confidence=round(max(0.55, retrieval.confidence * 0.75), 3),
+                    answer=None,
+                    confidence=retrieval.confidence,
                     confidence_reason=retrieval.confidence_reason,
-                    citations=citations,
-                    answered=True,
+                    citations=[],
+                    answered=False,
                     language=retrieval.language,  # type: ignore[arg-type]
+                    abstention_reason="missing_applicable_rate",
                     suggestions=suggestions,
+                    guidance=rate_answer(retrieval.query, retrieval.language),
                 )
             )
 
@@ -489,6 +529,12 @@ class Orchestrator:
                         language=retrieval.language,
                     )
                     faithfulness_label = recheck.label.value
+                    if recheck.should_regenerate:
+                        answer = ""
+                else:
+                    # Never publish the original answer when the strict
+                    # regeneration itself failed.
+                    answer = ""
 
         if not answer:
             return _finalize(

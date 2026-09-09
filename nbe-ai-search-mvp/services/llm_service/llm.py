@@ -298,6 +298,7 @@ class LLMService:
                         "system": SYSTEM_PROMPT,
                         "prompt": prompt,
                         "stream": False,
+                        "think": False,
                         "options": {"temperature": 0.1},
                     },
                 )

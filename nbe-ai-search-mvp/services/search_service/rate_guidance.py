@@ -7,14 +7,6 @@ import re
 from shared.arabic_normalize import normalize_arabic
 from shared.schemas import Citation, SearchSuggestion
 
-LOCAL_CERTIFICATES_URL = (
-    'https://www.nbe.com.eg/NBE/E/#/AR/ProductCategory?inParams={"CategoryID":"LocalCertificatesID"}'
-)
-LOCAL_CERTIFICATES_LEGACY_URL = (
-    'https://www.nbe.com.eg/NBE/E/#/AR/ProductCategory?inParams={"CategoryID":"CertificatesID"}'
-)
-LOCAL_DEPOSIT_RATES_URL = "https://www.nbe.com.eg/NBE/E/#/AR/Depositrateslocalcurrency"
-FOREIGN_RATES_URL = "https://www.nbe.com.eg/NBE/E/#/AR/CertificatesRatesForeignCurrency"
 
 RATE_INTENT_AR = re.compile(
     r"(عائد|فايده|فائدة|فائده|نسبه|نسبة|كام|كم).{0,40}(شهاد|شهادة)"
@@ -56,25 +48,17 @@ def context_has_applicable_rate(query: str, language: str, context_text: str) ->
 
 
 def rate_answer(query: str, language: str) -> str | None:
-    """User-facing answer when numeric yield is not in the index."""
+    """Evidence-based guidance when no applicable numeric rate was retrieved."""
     if not is_rate_query(query, language):
         return None
     if language == "ar":
-        if is_local_egp_rate_query(query, language):
-            return (
-                "لا تتوفر نسبة العائد الرقمية لشهادة الادخار بالجنيه المصري في المحتوى المفهرس حالياً، "
-                "لأن صفحة الأسعار على موقع البنك تُحمَّل ديناميكياً ولم تُسجَّل في عملية الأرشفة. "
-                "للاطلاع على العائد المعلن حالياً، افتح صفحة شهادات الادخار بالعملة المحلية على موقع "
-                "البنك الأهلي المصري أو تواصل مع أقرب فرع."
-            )
         return (
-            "نسبة العائد الرقمية غير متوفرة في المحتوى المفهرس حالياً. "
-            "راجع صفحات أسعار الشهادات على موقع البنك الأهلي المصري أو أقرب فرع."
+            "لم أجد نسبة عائد رقمية قابلة للتحقق ومطابقة للسؤال في المستندات "
+            "المسترجعة، لذلك لن أذكر رقماً غير موثق."
         )
     return (
-        "The exact yield figure is not available in the indexed content because NBE rate pages "
-        "are dynamically rendered. Please open the local-currency certificates page on nbe.com.eg "
-        "or visit a branch for the latest announced rate."
+        "No verifiable numeric yield matching the question was found in the "
+        "retrieved documents, so no unsupported figure will be provided."
     )
 
 
@@ -84,69 +68,8 @@ def rate_guidance(query: str, language: str) -> str | None:
 
 
 def rate_citations(query: str, language: str) -> list[Citation]:
-    if not is_rate_query(query, language):
-        return []
-    citations: list[Citation] = []
-    for item in rate_suggestions(query, language):
-        if item.url:
-            citations.append(Citation(title=item.label, url=item.url))
-    return citations
+    return []
 
 
 def rate_suggestions(query: str, language: str) -> list[SearchSuggestion]:
-    if not is_rate_query(query, language):
-        return []
-    if language == "ar":
-        items = [
-            SearchSuggestion(
-                query="شهادات الادخار بالعملة المحلية",
-                label="شهادات الادخار بالعملة المحلية (أسعار العائد)",
-                url=LOCAL_CERTIFICATES_URL,
-                reason="official_page",
-                score=1.0,
-            ),
-        ]
-        if is_local_egp_rate_query(query, language):
-            items.append(
-                SearchSuggestion(
-                    query="أسعار العائد على الودائع بالجنيه المصري",
-                    label="أسعار العائد على الودائع بالجنيه المصري",
-                    url=LOCAL_DEPOSIT_RATES_URL,
-                    reason="official_page",
-                    score=0.95,
-                )
-            )
-        items.extend(
-            [
-                SearchSuggestion(
-                    query="أسعار الشهادات بالعملة الأجنبية",
-                    label="أسعار الشهادات بالعملة الأجنبية",
-                    url=FOREIGN_RATES_URL,
-                    reason="official_page",
-                    score=0.9,
-                ),
-                SearchSuggestion(
-                    query="شراء شهادة ادخار",
-                    label="شراء شهادة ادخار",
-                    reason="topic_match",
-                    score=0.8,
-                ),
-            ]
-        )
-        return items
-    return [
-        SearchSuggestion(
-            query="local currency saving certificates NBE",
-            label="Local currency saving certificates",
-            url='https://www.nbe.com.eg/NBE/E/#/EN/ProductCategory?inParams={"CategoryID":"CertificatesID"}',
-            reason="official_page",
-            score=1.0,
-        ),
-        SearchSuggestion(
-            query="certificates foreign currency rates",
-            label="Foreign currency certificate rates",
-            url="https://www.nbe.com.eg/NBE/E/#/EN/CertificatesRatesForeignCurrency",
-            reason="official_page",
-            score=0.9,
-        ),
-    ]
+    return []

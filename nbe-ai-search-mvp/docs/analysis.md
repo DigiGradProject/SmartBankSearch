@@ -408,7 +408,7 @@ Please approve / amend:
 | Confidence | `services/rag/confidence.py` |
 | Intent allow-lists | `services/search_service/intent_classifier.py` |
 | Doc typing | `ingestion/classification/doc_classifier.py` |
-| FX stubs | `data/product_stubs.json` |
+| Curated, versioned documents | `data/curated_documents.json` |
 
 ---
 

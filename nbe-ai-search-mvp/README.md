@@ -91,10 +91,26 @@ Matches `plan-mvp.md` Section 13:
 
 ## Docker Compose
 
+GPU prerequisites on the host:
+
+- A working NVIDIA driver (`nvidia-smi` must succeed).
+- NVIDIA Container Toolkit configured for Docker.
+- Docker Compose with GPU device-reservation support.
+
 ```bash
 cd infra/docker
 docker compose up --build
 ```
+
+Verify GPU access after startup:
+
+```bash
+docker compose exec ollama nvidia-smi
+docker compose exec ollama ollama ps
+docker compose exec api python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+```
+
+`ollama ps` should report a GPU processor instead of `100% CPU`.
 
 ## Tests
 

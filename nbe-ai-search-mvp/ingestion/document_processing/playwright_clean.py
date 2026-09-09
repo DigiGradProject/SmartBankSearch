@@ -14,7 +14,7 @@ PLAYWRIGHT_NOISE_LINES = re.compile(
     r"هذه الرسالة تحتوي على بيانات شخصية|برجاء عدم الإفصاح|"
     r"This message contains personal or financial|Please do not disclose|"
     r"برجاء العلم أن الخدمة للاستعلام فقط|مرحبا،|دعنا نتحدث|"
-    r"#Category(?:Short|Middle|Footer)Container#|"
+    r"#(?:Category|Product)[A-Za-z]*Container#|"
     r"1187 كورنيش النيل|محليا: 19623|اتصل بنا على الفور"
     r")$",
     re.IGNORECASE,

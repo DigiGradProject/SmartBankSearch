@@ -67,6 +67,7 @@ async def evaluate_answer(
                     "model": settings.ollama_model,
                     "prompt": prompt,
                     "stream": False,
+                    "think": False,
                     "options": {"temperature": 0.0},
                 },
             )
@@ -74,9 +75,13 @@ async def evaluate_answer(
             raw = (response.json().get("response") or "").strip()
     except Exception as exc:  # noqa: BLE001
         logger.warning("self_eval_failed", error=str(exc))
-        return SelfEvalResult(FaithfulnessLabel.PARTIALLY_SUPPORTED, str(exc), False)
+        return SelfEvalResult(FaithfulnessLabel.UNSUPPORTED, str(exc), True)
 
-    label = parse_faithfulness_label(raw)
+    label = (
+        parse_faithfulness_label(raw)
+        if raw
+        else FaithfulnessLabel.UNSUPPORTED
+    )
     logger.info("self_eval_result", label=label.value)
     return SelfEvalResult(
         label=label,

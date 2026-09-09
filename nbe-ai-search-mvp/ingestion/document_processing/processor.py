@@ -1,6 +1,7 @@
 import json
 import re
 from pathlib import Path
+from datetime import date
 from shared.url_canonical import canonical_url_key
 
 from ingestion.classification.doc_classifier import classify_document
@@ -187,14 +188,27 @@ def load_documents_rescrape_dir(
 
 
 def load_merged_corpus(project_root: Path, limit: int | None = None) -> list[Document]:
-    """Base cleaned JSONL + Playwright rescrape overrides + product stubs."""
+    """Merge all available sources, preferring real content over curated fallbacks.
+
+    The cleaned JSONL is optional in local and MVP environments. When it is
+    unavailable, Playwright re-scrapes become the primary corpus instead of
+    making the whole ingestion run fail. Curated documents are merged last as
+    coverage fallbacks and never replace a real document with the same URL.
+    """
     from shared.config import settings
 
-    documents = load_documents_jsonl(settings.cleaned_jsonl_path, limit=None)
+    documents: list[Document] = []
+    if settings.cleaned_jsonl_path.exists():
+        documents = load_documents_jsonl(settings.cleaned_jsonl_path, limit=None)
+
     if settings.rescrape_json_path.exists():
         rescrape_docs = load_documents_rescrape_dir(settings.rescrape_json_path)
         documents = merge_documents_by_url(documents, rescrape_docs)
-    documents.extend(load_product_stubs(project_root))
+
+    # Curated fallbacks provide missing coverage only. Real documents win on
+    # canonical URL collisions because they are passed as overrides.
+    documents = merge_documents_by_url(load_curated_documents(project_root), documents)
+
     if limit:
         documents = documents[:limit]
     return documents
@@ -225,6 +239,12 @@ def load_documents_json(path: Path) -> list[Document]:
             language=doc.language,
             metadata=meta,
         )
+        preserved = {
+            key: value
+            for key, value in meta.items()
+            if key not in {"path", "source_folder", "block_count", "extra"}
+        }
+        doc.metadata.extra.update(preserved)
         doc.metadata.extra.update(
             {
                 "doc_type": classification.doc_type,
@@ -304,8 +324,39 @@ def load_documents_jsonl(
     return documents
 
 
-def load_product_stubs(project_root: Path) -> list[Document]:
-    stubs_path = project_root / "data" / "product_stubs.json"
-    if not stubs_path.exists():
+CURATED_REQUIRED_METADATA = {
+    "source",
+    "is_stub",
+    "curated_version",
+    "reviewed_at",
+    "valid_until",
+    "status",
+}
+
+
+def load_curated_documents(
+    project_root: Path,
+    *,
+    as_of: date | None = None,
+) -> list[Document]:
+    curated_path = project_root / "data" / "curated_documents.json"
+    if not curated_path.exists():
         return []
-    return load_documents_json(stubs_path)
+    with curated_path.open(encoding="utf-8") as handle:
+        payload = json.load(handle)
+    effective_date = as_of or date.today()
+    active_ids: set[str] = set()
+    for item in payload:
+        metadata = item.get("metadata") or {}
+        missing = CURATED_REQUIRED_METADATA - metadata.keys()
+        if missing:
+            raise ValueError(
+                f"Curated document {item.get('id', '<unknown>')} missing metadata: "
+                f"{', '.join(sorted(missing))}"
+            )
+        if metadata["source"] != "curated_document" or metadata["status"] != "approved":
+            continue
+        if date.fromisoformat(str(metadata["valid_until"])) < effective_date:
+            continue
+        active_ids.add(str(item["id"]))
+    return [doc for doc in load_documents_json(curated_path) if doc.id in active_ids]

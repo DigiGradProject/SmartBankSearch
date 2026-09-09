@@ -19,14 +19,34 @@ def test_is_card_types_query():
     assert not is_card_types_query("بطاقات ائتمان", "ar")
 
 
-def test_build_card_types_answer_lists_three_families():
-    answer = build_card_types_answer([], "ar")
+def _card_chunk(cid: str, title: str, category_id: str, doc_type: str):
+    return RetrievedChunk(
+        cid,
+        cid,
+        title,
+        f'https://www.nbe.com.eg/#/AR/ProductDetails?inParams={{"CategoryID":"{category_id}"}}',
+        "ar",
+        f"صفحة رسمية عن {title}",
+        0.9,
+        doc_type=doc_type,
+        category="cards",
+    )
+
+
+def test_build_card_types_answer_uses_only_retrieved_families():
+    chunks = [
+        _card_chunk("credit", "فيزا كلاسيك", "CreditCardsID", "credit_card"),
+        _card_chunk("debit", "ميزة", "DepitCardsID", "debit_card"),
+        _card_chunk("prepaid", "بطاقة ميزة المدفوعة مقدما", "PrepaidCardsID", "debit_card"),
+    ]
+    answer = build_card_types_answer(chunks, "ar")
     assert answer is not None
     assert "بطاقات الائتمان" in answer
     assert "بطاقات الخصم المباشر" in answer
     assert "المدفوعة مقدما" in answer
     assert "فيزا كلاسيك" in answer
     assert "ميزة" in answer
+    assert build_card_types_answer([], "ar") is None
 
 
 def test_credit_cards_overview_query():
@@ -35,14 +55,16 @@ def test_credit_cards_overview_query():
     assert not is_credit_cards_overview_query("بطاقات الخصم المباشر", "ar")
 
 
-def test_build_credit_cards_answer_is_rich():
-    answer = build_credit_cards_answer([], "ar")
+def test_build_credit_cards_answer_does_not_invent_features():
+    chunks = [
+        _card_chunk("credit", "فيزا كلاسيك", "CreditCardsID", "credit_card"),
+    ]
+    answer = build_credit_cards_answer(chunks, "ar")
     assert answer is not None
     assert "فيزا كلاسيك" in answer
-    assert "فيزا انفينيت" in answer
-    assert "الأهلي بوينتس" in answer
-    assert "بناءً على محتوى" not in answer
-    assert len(answer) > 400
+    assert "فيزا انفينيت" not in answer
+    assert "الأهلي بوينتس" not in answer
+    assert build_credit_cards_answer([], "ar") is None
 
 
 def test_build_card_citations_prefers_product_pages_over_generic_nav():

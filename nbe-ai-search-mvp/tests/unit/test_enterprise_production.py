@@ -104,6 +104,12 @@ def test_planner_single_intent_unchanged():
     assert len(plan.subqueries) == 1
 
 
+def test_planner_does_not_promote_weak_fragment_for_investment_query():
+    plan = plan_query("انا معايا فلوس وعايز استثمر بيهم", "ar")
+    assert plan.is_multi is False
+    assert [sub.intent_name for sub in plan.subqueries] == ["certificate_buy"]
+
+
 def test_self_eval_label_parse():
     assert parse_faithfulness_label("The answer is SUPPORTED.") == FaithfulnessLabel.SUPPORTED
     assert parse_faithfulness_label("UNSUPPORTED material") == FaithfulnessLabel.UNSUPPORTED

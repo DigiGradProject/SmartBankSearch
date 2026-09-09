@@ -6,7 +6,12 @@
     "language": "ar",
     "content": "صفحة أسعار صرف العملات ومحول العملات في البنك الأهلي المصري. تعرض أسعار شراء وبيع العملات الأجنبية مقابل الجنيه المصري (بنكنوت وتحويل). تشمل الدولار الأمريكي واليورو والجنيه الإسترليني وعملات أخرى.",
     "metadata": {
-      "source": "product_stub",
+      "source": "curated_document",
+      "is_stub": true,
+      "curated_version": "2026-08-17.1",
+      "reviewed_at": "2026-08-17",
+      "valid_until": "2026-09-17",
+      "status": "approved",
       "doc_type": "exchange_rate",
       "category": "exchange_rates",
       "canonical_url_slug": "ExchangeRatesAndCurrencyConverter"
@@ -19,7 +24,12 @@
     "language": "en",
     "content": "NBE exchange rates and currency converter page. Shows buy and sell rates for foreign currencies against the Egyptian pound (banknote and transfer rates). Includes USD, EUR, GBP and other currencies.",
     "metadata": {
-      "source": "product_stub",
+      "source": "curated_document",
+      "is_stub": true,
+      "curated_version": "2026-08-17.1",
+      "reviewed_at": "2026-08-17",
+      "valid_until": "2026-09-17",
+      "status": "approved",
       "doc_type": "exchange_rate",
       "category": "exchange_rates",
       "canonical_url_slug": "ExchangeRatesAndCurrencyConverter"
@@ -32,7 +42,12 @@
     "language": "ar",
     "content": "شهادات بلادي سنة من البنك الأهلي المصري. المنتجات المتاحة تشمل: بلادي باليورو (الحد الأدنى 100 يورو، مدة سنة، عائد ثابت)، بلادي بالجنيه الاسترليني (الحد الأدنى 100 جنيه استرليني، مدة سنة)، بلادي بالدولار الأسترالي (الحد الأدنى 100 دولار أسترالي، مدة سنة). تصدر للأفراد المصريين المقيمين بالخارج ولأبنائهم القصر. بلادي بالدولار الأمريكي مذكورة في قائمة منتجات البنك؛ صفحة التفاصيل المباشرة قد لا تعرض محتوى حالياً على الموقع.",
     "metadata": {
-      "source": "product_stub",
+      "source": "curated_document",
+      "is_stub": true,
+      "curated_version": "2026-08-17.1",
+      "reviewed_at": "2026-08-17",
+      "valid_until": "2026-09-17",
+      "status": "approved",
       "doc_type": "certificate",
       "category": "certificates"
     }
@@ -44,7 +59,12 @@
     "language": "ar",
     "content": "صفحة أسعار الشهادات بالعملة الأجنبية في البنك الأهلي المصري. تتضمن معلومات عن شهادات بلادي وشهادات أخرى بالعملات الأجنبية بما فيها الدولار الأمريكي. للاطلاع على العائد وشروط الاشتراك الحالية راجع هذه الصفحة أو تواصل مع أقرب فرع.",
     "metadata": {
-      "source": "product_stub",
+      "source": "curated_document",
+      "is_stub": true,
+      "curated_version": "2026-08-17.1",
+      "reviewed_at": "2026-08-17",
+      "valid_until": "2026-09-17",
+      "status": "approved",
       "doc_type": "certificate_rate",
       "category": "certificates"
     }
@@ -56,7 +76,12 @@
     "language": "ar",
     "content": "شهادات بلادي 3 سنوات من البنك الأهلي المصري بالعملات الأجنبية، بما فيها فئات بالدولار الأمريكي واليورو والجنيه الاسترليني. للتفاصيل والعائد راجع صفحة فئة شهادات بلادي 3 سنوات على موقع البنك.",
     "metadata": {
-      "source": "product_stub",
+      "source": "curated_document",
+      "is_stub": true,
+      "curated_version": "2026-08-17.1",
+      "reviewed_at": "2026-08-17",
+      "valid_until": "2026-09-17",
+      "status": "approved",
       "doc_type": "certificate",
       "category": "certificates"
     }
@@ -68,7 +93,12 @@
     "language": "ar",
     "content": "شهادات بلادي 5 سنوات من البنك الأهلي المصري بالعملات الأجنبية، بما فيها فئات بالدولار الأمريكي واليورو والجنيه الاسترليني. للتفاصيل والعائد راجع صفحة فئة شهادات بلادي 5 سنوات على موقع البنك.",
     "metadata": {
-      "source": "product_stub",
+      "source": "curated_document",
+      "is_stub": true,
+      "curated_version": "2026-08-17.1",
+      "reviewed_at": "2026-08-17",
+      "valid_until": "2026-09-17",
+      "status": "approved",
       "doc_type": "certificate",
       "category": "certificates"
     }
@@ -80,7 +110,12 @@
     "language": "ar",
     "content": "شراء شهادة من البنك الأهلي المصري. تتوفر شهادات ادخار متعددة: شهادات بلادي (سنة، 3 سنوات، 5 سنوات) بالعملات الأجنبية، شهادات بالعملة المحلية، شهادات بالعملة الأجنبية، وشهادات الاستثمار. يمكن الاطلاع على تفاصيل كل شهادة وشرائها عبر موقع البنك الأهلي أو زيارة أقرب فرع. خدمة شراء شهادة متاحة ضمن الخدمات الذاتية على الموقع.",
     "metadata": {
-      "source": "product_stub",
+      "source": "curated_document",
+      "is_stub": true,
+      "curated_version": "2026-08-17.1",
+      "reviewed_at": "2026-08-17",
+      "valid_until": "2026-09-17",
+      "status": "approved",
       "doc_type": "certificate",
       "category": "certificates"
     }
@@ -92,7 +127,12 @@
     "language": "ar",
     "content": "شهادات الادخار في البنك الأهلي المصري تشمل شهادات بلادي وشهادات بالعملة المحلية والأجنبية وشهادات الاستثمار. للشراء أو الاشتراك راجع صفحة الشهادات على موقع البنك أو تواصل مع الفرع الأقرب.",
     "metadata": {
-      "source": "product_stub",
+      "source": "curated_document",
+      "is_stub": true,
+      "curated_version": "2026-08-17.1",
+      "reviewed_at": "2026-08-17",
+      "valid_until": "2026-09-17",
+      "status": "approved",
       "doc_type": "certificate",
       "category": "certificates"
     }
@@ -102,9 +142,14 @@
     "title": "شهادات الادخار بالعملة المحلية",
     "url": "https://www.nbe.com.eg/NBE/E/#/AR/ProductCategory?inParams={\"CategoryID\":\"CertificatesID\"}",
     "language": "ar",
-    "content": "شهادات الادخار بالعملة المحلية (الجنيه المصري) من البنك الأهلي المصري تشمل مدد واستحقاقات متعددة منها شهادات لمدة سنة. أسعار العائد تتغير وتُعلن رسمياً على موقع البنك أو في الفروع. المحتوى المفهرس حالياً من عملية الـ scrape لا يتضمن نسبة عائد رقمية ثابتة لشهادة سنة واحدة بالجنيه المصري لأن صفحات الأسعار تُعرض ديناميكياً. لذلك لا يمكن ذكر رقم فايدة محدد من الفهرس؛ للاطلاع على العائد الحالي راجع صفحة شهادات الادخار بالعملة المحلية على موقع البنك الأهلي أو اسأل أقرب فرع.",
+    "content": "مرجع مُراجع لصفحة شهادات الادخار بالعملة المحلية. يجب استخدام نسب العائد والشروط من أحدث مستند رسمي مسترجع فقط، وعدم ذكر أي نسبة لا تظهر صراحة في المصدر.",
     "metadata": {
-      "source": "product_stub",
+      "source": "curated_document",
+      "is_stub": true,
+      "curated_version": "2026-08-17.1",
+      "reviewed_at": "2026-08-17",
+      "valid_until": "2026-09-17",
+      "status": "approved",
       "doc_type": "certificate_rate",
       "category": "certificates"
     }
@@ -114,9 +159,14 @@
     "title": "Local currency saving certificates",
     "url": "https://www.nbe.com.eg/NBE/E/#/EN/ProductCategory?inParams={\"CategoryID\":\"CertificatesID\"}",
     "language": "en",
-    "content": "NBE local-currency (EGP) saving certificates include multiple tenors such as one-year certificates. Interest/yield rates change and are published on the official NBE website or at branches. The currently indexed scrape does not contain a fixed numeric yield for a one-year EGP certificate because rate pages are dynamically rendered. Do not invent a rate from this index; check the local-currency certificates page on nbe.com.eg or ask a branch for the latest announced rate.",
+    "content": "Reviewed reference for the local-currency saving certificates page. Yield figures and conditions must come from the latest retrieved official document; no figure may be stated unless it appears explicitly in that source.",
     "metadata": {
-      "source": "product_stub",
+      "source": "curated_document",
+      "is_stub": true,
+      "curated_version": "2026-08-17.1",
+      "reviewed_at": "2026-08-17",
+      "valid_until": "2026-09-17",
+      "status": "approved",
       "doc_type": "certificate_rate",
       "category": "certificates"
     }

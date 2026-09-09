@@ -40,6 +40,16 @@ def test_atm_intent():
     assert intent.intent == "atm_locator"
 
 
+def test_colloquial_investment_intent_routes_to_certificate_buy():
+    intent = classify_query("انا معايا فلوس وعايز استثمر بيهم", "ar")
+    assert intent.intent == "certificate_buy"
+
+
+def test_colloquial_amount_and_profit_routes_to_certificate_buy():
+    intent = classify_query("معايا 80000 جنيه وعايز طريقة تزود ارباحهم", "ar")
+    assert intent.intent == "certificate_buy"
+
+
 def test_exchange_rate_en():
     intent = classify_query("exchange rates", "en")
     assert intent.intent == "exchange_rate"
