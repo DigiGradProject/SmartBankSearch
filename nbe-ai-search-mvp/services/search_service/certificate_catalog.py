@@ -43,8 +43,15 @@ def _certificate_names(chunks: list[RetrievedChunk], language: str) -> list[str]
             r"شهاد|certificate|belady", f"{chunk.title} {chunk.text}", re.I
         ):
             continue
-        candidate = _clean_source_title(chunk.product_name or chunk.title)
+        # Some scraped pages carry the numeric ProductID in product_name.
+        # Prefer the human-readable page title when that happens.
+        raw_name = (chunk.product_name or "").strip()
+        if not raw_name or re.fullmatch(r"\d+", raw_name):
+            raw_name = chunk.title
+        candidate = _clean_source_title(raw_name)
         if not candidate or candidate.lower() in {"شهادات", "certificates"}:
+            continue
+        if re.fullmatch(r"\d+", candidate):
             continue
         if language == "ar" and not re.search(r"[\u0600-\u06FF]", candidate):
             continue
@@ -89,23 +96,32 @@ def build_certificate_buy_answer(
     if not chunks:
         return None
 
-    names = _certificate_names(chunks, language)
-    if not names:
+    has_certificate_source = any(
+        getattr(chunk, "category", "") == "certificates"
+        or re.search(r"شهاد|certificate|belady", f"{chunk.title} {chunk.text}", re.I)
+        for chunk in chunks
+    )
+    if not has_certificate_source:
         return None
 
-    bullet = "\n• ".join(names[:5])
     if language == "ar":
         return (
-            "لو هدفك استثمار المبلغ في شهادة من البنك الأهلي المصري، "
-            "فالنتائج المتاحة تشمل:\n"
-            f"• {bullet}\n"
-            "راجع صفحة كل شهادة وقارن مدة الشهادة والعائد ودورية صرفه، "
-            "ثم افتح صفحة المنتج المناسبة لمعرفة التفاصيل وخطوات الشراء."
+            "لشراء شهادة استثمار أو ادخار من البنك الأهلي المصري، افتح صفحة "
+            "شهادات الادخار الرسمية أولاً، ثم اختر الشهادة المناسبة بعد مراجعة:\n"
+            "• العملة ومدة الشهادة.\n"
+            "• قيمة العائد ودورية صرفه.\n"
+            "• الحد الأدنى للشراء وشروط الاسترداد والاقتراض بضمان الشهادة.\n"
+            "بعد اختيار الشهادة، افتح صفحة المنتج لمعرفة وسائل وخطوات الشراء المتاحة. "
+            "إذا حددت العملة والمبلغ والمدة المطلوبة، يمكنني مساعدتك في المقارنة."
         )
 
     return (
-        "If you want to invest the amount in an NBE certificate, the available results include:\n"
-        f"• {bullet}\n"
-        "Review each certificate page and compare its term, yield, and payout frequency, "
-        "then open the matching product page for details and purchase steps."
+        "To buy an NBE investment or savings certificate, start with the official "
+        "Saving Certificates page, then choose a suitable certificate after reviewing:\n"
+        "• Currency and term.\n"
+        "• Yield and payout frequency.\n"
+        "• Minimum purchase amount, redemption rules, and borrowing terms.\n"
+        "After choosing a certificate, open its product page for the available purchase methods "
+        "and steps. If you share your preferred currency, amount, and term, I can help compare "
+        "the relevant options."
     )

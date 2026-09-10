@@ -36,3 +36,13 @@ def test_broken_productdetails_url_blocked():
     good = "https://www.nbe.com.eg/NBE/E/#/AR/ProductCategory?inParams={\"CategoryID\":\"beladyoneyear\"}"
     assert is_broken_citation_url(bad)
     assert not is_broken_citation_url(good)
+
+
+def test_al_ahly_points_query_only_cites_official_program_page():
+    builder = ContextBuilder()
+    chunks = [
+        RetrievedChunk("fx", "fx", "Exchange Rates", "https://nbe/#/EN/ExchangeRatesAndCurrencyConverter", "en", "Al Ahly Points text", 1.0),
+        RetrievedChunk("points", "points", "Al Ahly Points", "https://nbe/#/EN/ProductCategory?CategoryID=ahlypoints", "en", "Loyalty program details and redemption", 0.95),
+    ]
+    built = builder.build("al ahly points", chunks, compress=False)
+    assert [citation.url for citation in built.citations] == [chunks[1].url]

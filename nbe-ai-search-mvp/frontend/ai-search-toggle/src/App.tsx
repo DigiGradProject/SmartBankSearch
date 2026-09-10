@@ -243,6 +243,53 @@ const QUICK_ACCESS: QuickItem[] = [
 ];
 
 const NBE_WEBSITE = "https://www.nbe.com.eg";
+function normalizeSourceLabel(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/\*\*/g, "")
+    .replace(/^national bank of egypt\s*-\s*/, "")
+    .replace(/\s+program$/, "")
+    .trim();
+}
+
+function renderAnswerWithLinkedSources(answer: string, citations: Citation[]) {
+  let inSourceSection = false;
+  let sourceIndex = 0;
+
+  return answer.split("\n").map((line, index, lines) => {
+    const isHeading = /^###\s+/.test(line);
+    const isSourceHeading = /^###\s+(?:source|sources|المصدر|المصادر)\s*$/i.test(line);
+    if (isHeading) inSourceSection = isSourceHeading;
+
+    let content: ReactNode = line;
+    if (inSourceSection && /^-\s+/.test(line) && citations.length > 0) {
+      const label = line.replace(/^-\s+/, "").replace(/\*\*/g, "").trim();
+      const normalizedLabel = normalizeSourceLabel(label);
+      const citation =
+        citations.find((item) => {
+          const normalizedTitle = normalizeSourceLabel(item.title);
+          return normalizedTitle.includes(normalizedLabel) || normalizedLabel.includes(normalizedTitle);
+        }) ?? citations[Math.min(sourceIndex, citations.length - 1)];
+      sourceIndex += 1;
+      content = (
+        <>
+          <span aria-hidden="true">- </span>
+          <a className="answer-source-link" href={citation.url} target="_blank" rel="noreferrer">
+            {label}
+          </a>
+        </>
+      );
+    }
+
+    return (
+      <span key={`${index}-${line.slice(0, 20)}`}>
+        {content}
+        {index < lines.length - 1 ? "\n" : null}
+      </span>
+    );
+  });
+}
+
 
 /* ------------------------------------------------------------------ */
 /* App                                                                 */
@@ -700,14 +747,11 @@ export default function App() {
                           {result.cache_hit && <span>{ar ? "من الذاكرة" : "Cached"}</span>}
                         </div>
                       </div>
-                      {result.confidence_reason && (
-                        <p className="confidence-reason">{result.confidence_reason}</p>
-                      )}
                       <div
                         className="answer"
                         dir={result.language === "ar" || isArabic ? "rtl" : "ltr"}
                       >
-                        {result.answer}
+                        {renderAnswerWithLinkedSources(result.answer ?? "", result.citations)}
                       </div>
                       {result.citations.length > 0 && (
                         <section className="citations" aria-labelledby="sources-title">

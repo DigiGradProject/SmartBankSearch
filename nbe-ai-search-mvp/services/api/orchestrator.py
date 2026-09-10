@@ -342,7 +342,12 @@ class Orchestrator:
                 logger.info("search_exact_cache_rejected", reason="retrieval_source_mismatch")
 
         semantic = self._get_semantic_cache()
-        if semantic:
+        # These deterministic responses evolve with response formatting and
+        # must not be replaced by an older semantic-cache payload.
+        certificate_intents = {"certificate_buy", "certificate_types"}
+        skip_semantic_cache = bool(certificate_intents.intersection(retrieval.intent.split("+")))
+        skip_semantic_cache = skip_semantic_cache or "ahly points" in " ".join(query.lower().split())
+        if semantic and not skip_semantic_cache:
             hit = semantic.lookup(query, retrieval.language)
             if hit:
                 response = SearchResponse.model_validate(hit.payload)

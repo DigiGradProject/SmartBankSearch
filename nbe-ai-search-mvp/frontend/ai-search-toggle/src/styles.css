@@ -974,6 +974,19 @@ input:focus-visible {
 .answer[dir="rtl"] {
   line-height: 2.05;
 }
+.answer-source-link {
+  color: var(--green);
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.answer-source-link:hover,
+.answer-source-link:focus-visible {
+  color: var(--green-dark);
+}
+
 
 /* ---- sources ------------------------------------------------------ */
 

@@ -28,6 +28,16 @@ def _is_citable(chunk: RetrievedChunk) -> bool:
     )
 
 
+def _scope_citations_for_query(
+    query: str, chunks: list[RetrievedChunk]
+) -> list[RetrievedChunk]:
+    normalized = " ".join(query.lower().split())
+    if "ahly points" not in normalized:
+        return chunks
+    scoped = [chunk for chunk in chunks if "ahlypoints" in (chunk.url or "").lower()]
+    return scoped or chunks
+
+
 class ContextBuilder:
     def build(
         self,
@@ -56,7 +66,8 @@ class ContextBuilder:
             used_chunks.append(chunk)
             used_tokens += block_tokens
 
-        citations = self._select_citations(primary or used_chunks)
+        citation_chunks = _scope_citations_for_query(query, primary or used_chunks)
+        citations = self._select_citations(citation_chunks)
 
         return BuiltContext(
             context_text="\n\n".join(context_parts),
