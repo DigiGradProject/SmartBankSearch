@@ -1,0 +1,29 @@
+{
+  "count": 220,
+  "languages": {
+    "ar": 127,
+    "en": 93
+  },
+  "intents": {
+    "exchange_rate": 85,
+    "personal_loan": 57,
+    "credit_card": 33,
+    "card_types": 4,
+    "certificate_rate": 9,
+    "certificate_buy": 2,
+    "certificate_types": 4,
+    "account_open": 11,
+    "branch_locator": 3,
+    "atm_locator": 2,
+    "offers": 2,
+    "faq": 2,
+    "corporate": 2,
+    "sme": 2,
+    "wallet": 2
+  },
+  "mixed_script_queries": [],
+  "unique_queries": 220,
+  "exact_golden_overlap": [],
+  "missing_url_labels": 10,
+  "forbidden_labels": 43
+}

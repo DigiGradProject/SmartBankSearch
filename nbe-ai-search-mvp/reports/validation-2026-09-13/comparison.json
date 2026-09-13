@@ -1,0 +1,65 @@
+{
+  "dataset": "/home/jovyan/search/SmartBankSearch/nbe-ai-search-mvp/tests/retrieval/validation_set.jsonl",
+  "summaries": {
+    "PURE_SEMANTIC": {
+      "recall@5": 0.7136363636363636,
+      "mrr": 0.5903030303030303,
+      "ndcg@5": 0.6133801771293806,
+      "intent_accuracy": 0.85,
+      "top1": 0.5272727272727272,
+      "top3": 0.6409090909090909,
+      "confidence_accuracy": 0.7545454545454545,
+      "latency_ms_mean": 3071.699081259695,
+      "latency_ms_p95": 3330.032777041197,
+      "total": 220,
+      "mode": "PURE_SEMANTIC"
+    },
+    "ENTERPRISE": {
+      "recall@5": 0.8227272727272728,
+      "mrr": 0.806590909090909,
+      "ndcg@5": 0.8066885984902981,
+      "intent_accuracy": 0.85,
+      "top1": 0.8,
+      "top3": 0.8045454545454546,
+      "confidence_accuracy": 0.8727272727272727,
+      "latency_ms_mean": 2820.720230339264,
+      "latency_ms_p95": 3436.7619529366493,
+      "total": 220,
+      "mode": "ENTERPRISE"
+    }
+  },
+  "comparison": {
+    "PURE_SEMANTIC": {
+      "recall@5": 0.7136363636363636,
+      "mrr": 0.5903030303030303,
+      "ndcg@5": 0.6133801771293806,
+      "intent_accuracy": 0.85,
+      "top1": 0.5272727272727272,
+      "top3": 0.6409090909090909,
+      "confidence_accuracy": 0.7545454545454545,
+      "latency_ms_mean": 3071.699081259695,
+      "total": 220
+    },
+    "ENTERPRISE": {
+      "recall@5": 0.8227272727272728,
+      "mrr": 0.806590909090909,
+      "ndcg@5": 0.8066885984902981,
+      "intent_accuracy": 0.85,
+      "top1": 0.8,
+      "top3": 0.8045454545454546,
+      "confidence_accuracy": 0.8727272727272727,
+      "latency_ms_mean": 2820.720230339264,
+      "total": 220
+    },
+    "delta_enterprise_minus_pure": {
+      "recall@5": 0.10909090909090913,
+      "mrr": 0.2162878787878787,
+      "ndcg@5": 0.19330842136091742,
+      "intent_accuracy": 0.0,
+      "top1": 0.2727272727272728,
+      "top3": 0.1636363636363637,
+      "confidence_accuracy": 0.11818181818181817,
+      "latency_ms_mean": -250.9788509204309
+    }
+  }
+}
