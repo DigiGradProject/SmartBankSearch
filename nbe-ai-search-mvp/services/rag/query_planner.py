@@ -53,6 +53,12 @@ def _distinct_intents(parts: list[str], language: str) -> list[tuple[str, str]]:
             and intent.confidence < settings.semantic_intent_regex_fallback_threshold
         ):
             continue
+        # A fragment that fell through to the broad fallback carries no intent
+        # of its own; the primary (whole-query) classification already covers
+        # it. Opening a general_faq branch from a fragment used to happen when
+        # weak semantic wins were rejected upstream and routed here.
+        if intent.intent == "general_faq":
+            continue
         if intent.intent in seen:
             continue
         if intent.intent == "general_faq" and out:

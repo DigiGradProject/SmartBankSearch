@@ -36,7 +36,7 @@ python scripts/export_documents.py --limit 50
 
 ```bash
 set PYTHONPATH=.
-python scripts\run_ingest.py --source merged
+python scripts/run_ingest.py --source merged
 ```
 
 First run downloads **BGE-M3** and (on first search) **bge-reranker-v2-m3**.
@@ -56,7 +56,7 @@ Optional deeper MoE tier: `ollama pull qwen3:30b` then set `OLLAMA_MODEL_TIER2=q
 
 ```bash
 set PYTHONPATH=.
-uvicorn services.api.main:app --reload --port 7000
+uvicorn services.api.main:app --reload --host :: --port 7000
 ```
 
 ### 6. Start frontend

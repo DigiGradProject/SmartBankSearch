@@ -73,6 +73,7 @@ def classify_semantic(query: str, language: str) -> QueryIntent:
 
     best_intent = "general_faq"
     best_score = 0.0
+    runner_up = 0.0
     per_intent: dict[str, float] = {}
 
     for label, proto_vec in zip(labels, vectors):
@@ -80,9 +81,21 @@ def classify_semantic(query: str, language: str) -> QueryIntent:
         per_intent[label] = max(per_intent.get(label, 0.0), score)
 
     if per_intent:
-        best_intent, best_score = max(per_intent.items(), key=lambda item: item[1])
+        ranked = sorted(per_intent.items(), key=lambda item: item[1], reverse=True)
+        best_intent, best_score = ranked[0]
+        runner_up = ranked[1][1] if len(ranked) > 1 else 0.0
 
-    if best_score < settings.semantic_intent_min_score:
+    floor = settings.semantic_intent_min_score
+    margin = settings.semantic_intent_margin
+    if best_score < floor or (best_score - runner_up) < margin:
+        logger.info(
+            "semantic_intent_rejected",
+            best_intent=best_intent,
+            best_score=round(best_score, 3),
+            runner_up=round(runner_up, 3),
+            floor=floor,
+            required_margin=margin,
+        )
         return QueryIntent(
             intent="general_faq",
             category="general",
