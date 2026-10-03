@@ -26,11 +26,7 @@ POINTS_URL = (
 
 
 def _chunks() -> list[RetrievedChunk]:
-    """Reproduce the observed post-rerank scores from the production logs.
-
-    Body texts are realistic page paragraphs (the compressor's char-Jaccard
-    deduper collapses short similar sentences, which real chunks never trip).
-    """
+    """Reproduce the observed post-rerank scores from the production logs."""
     return [
         RetrievedChunk(
             "c1", "EN_ExchangeRates", "National Bank of Egypt - Exchange Rates And Currency Converter",
@@ -64,9 +60,9 @@ def _chunks() -> list[RetrievedChunk]:
 
 def test_offtopic_head_with_dominant_pool_is_dropped() -> None:
     """A saturated off-topic page must not crowd out the dominant category."""
-    # compress=False: the citation guard is under test here, not the
-    # compressor (whose char-Jaccard dedupe collapses short English bodies).
-    built = ContextBuilder().build("Al Ahly Points", _chunks(), compress=False)
+    # Runs with compression enabled (the default) so the citation guard is
+    # exercised behind the real compressor path.
+    built = ContextBuilder().build("Al Ahly Points", _chunks())
     urls = [c.url for c in built.citations]
     assert EXCHANGE_URL not in urls
     assert POINTS_URL in urls
@@ -77,7 +73,7 @@ def test_offtopic_head_gap_threshold_is_configurable() -> None:
     chunks = _chunks()
     # True source scored 0.95: gap 0.05 < citation_category_gap → keep head.
     chunks[1] = replace(chunks[1], score=0.95)
-    built = ContextBuilder().build("Al Ahly Points", chunks, compress=False)
+    built = ContextBuilder().build("Al Ahly Points", chunks)
     urls = [c.url for c in built.citations]
     assert EXCHANGE_URL in urls
 
@@ -85,7 +81,7 @@ def test_offtopic_head_gap_threshold_is_configurable() -> None:
 def test_no_dominant_pool_keeps_head() -> None:
     """If the head category is the only category, nothing is dropped."""
     chunks = [replace(_chunks()[0], title="Only page")]
-    built = ContextBuilder().build("exchange rates", chunks, compress=False)
+    built = ContextBuilder().build("exchange rates", chunks)
     assert [c.url for c in built.citations] == [EXCHANGE_URL]
 
 
@@ -93,7 +89,7 @@ def test_low_citation_floor_would_admit_true_source_when_reanchored() -> None:
     """Re-anchored floor admits the true source even below the global floor."""
     chunks = _chunks()
     assert chunks[1].score < settings.citation_min_score
-    built = ContextBuilder().build("Al Ahly Points", chunks, compress=False)
+    built = ContextBuilder().build("Al Ahly Points", chunks)
     assert POINTS_URL in [c.url for c in built.citations]
 
 

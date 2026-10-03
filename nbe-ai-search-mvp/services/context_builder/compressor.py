@@ -16,6 +16,13 @@ from shared.url_canonical import canonical_url_key
 
 logger = get_logger(__name__)
 
+# Word 3-gram shingle Jaccard threshold above which two chunk texts are
+# considered near-duplicates. Character-set Jaccard (the old approach) scored
+# any two fluent English paragraphs >= 0.82 because both cover the alphabet.
+_NEAR_DUPLICATE_THRESHOLD = 0.82
+
+_WORD_RE = re.compile(r"[\w']+", re.UNICODE)
+
 BOILERPLATE = re.compile(
     r"(جميع الحقوق محفوظة|أهلا\s*بك|welcome\s*to|cookie|subscribe|"
     r"login|تسجيل\s*الدخول|menu|القائمة)",
@@ -27,8 +34,23 @@ def _approx_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
 
-def _char_jaccard(a: str, b: str) -> float:
-    sa, sb = set(a.lower()), set(b.lower())
+def _shingles(text: str, n: int = 3) -> set[str]:
+    """Word n-gram shingles of *text* (empty for text without words)."""
+    words = _WORD_RE.findall(text.lower())
+    if not words:
+        return set()
+    if len(words) < n:
+        return {" ".join(words)}
+    return {" ".join(words[i : i + n]) for i in range(len(words) - n + 1)}
+
+
+def _shingle_jaccard(a: str, b: str, n: int = 3) -> float:
+    """Jaccard similarity over word n-gram shingles (order-sensitive).
+
+    Unlike character-set Jaccard, two distinct fluent paragraphs score low
+    (~0.0-0.2) while true near-duplicates of the same content score high.
+    """
+    sa, sb = _shingles(a, n), _shingles(b, n)
     if not sa or not sb:
         return 0.0
     return len(sa & sb) / len(sa | sb)
@@ -88,7 +110,10 @@ def compress_chunks(
         dedupe_key = f"{url_key}|{heading[:40]}"
 
         # Near-duplicate against already kept
-        if any(_char_jaccard(text[:400], (k.text or "")[:400]) >= 0.82 for k in kept):
+        if any(
+            _shingle_jaccard(text[:400], (k.text or "")[:400]) >= _NEAR_DUPLICATE_THRESHOLD
+            for k in kept
+        ):
             continue
         if dedupe_key in seen_keys:
             # Merge into previous same-url chunk when overlapping
