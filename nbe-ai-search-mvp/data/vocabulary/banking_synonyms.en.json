@@ -13,5 +13,11 @@
   "account": ["open account", "bank account", "savings account"],
   "phone cash": ["mobile wallet", "electronic wallet"],
   "usd": ["us dollar", "dollar", "american dollar"],
-  "eur": ["euro", "european currency"]
+  "eur": ["euro", "european currency"],
+  "al ahly net": ["alahly net", "internet banking", "digital banking"],
+  "alahly net": ["internet banking", "digital banking"],
+  "al ahly points": ["alahly points", "loyalty points"],
+  "alahly points": ["loyalty points"],
+  "al ahly business": ["alahly business", "corporate banking", "business banking"],
+  "alahly business": ["corporate banking", "business banking"]
 }

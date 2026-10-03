@@ -21,7 +21,7 @@ INTENT_DOC_TYPES: dict[str, tuple[str, ...]] = {
     "atm_locator": ("branch", "atm"),
     "account_open": ("account",),
     "wallet": ("wallet",),
-    "digital_banking": ("digital_banking", "wallet"),
+    "digital_banking": ("digital_banking", "wallet", "product"),
     "offers": ("offer", "product", "general"),
     "news": ("news", "general"),
     "reports": ("report", "general"),

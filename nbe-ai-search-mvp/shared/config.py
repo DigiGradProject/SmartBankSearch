@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     context_max_tokens: int = 2000
     confidence_threshold: float = 0.42
     citation_min_score: float = 0.45
+    # A citation from a category other than the dominant one must be within
+    # this gap of the top score, else it is dropped (guards against an
+    # off-topic page saturating the reranker and crowding out the true source).
+    citation_category_gap: float = 0.30
     max_citations: int = 3
 
     ollama_base_url: str = "http://localhost:11434"
@@ -70,7 +74,13 @@ class Settings(BaseSettings):
     semantic_intent_enabled: bool = True
     semantic_intent_high_confidence: float = 0.90
     semantic_intent_regex_fallback_threshold: float = 0.60
-    semantic_intent_min_score: float = 0.42
+    # Floor above which the semantic winner may route an intent. BGE-M3 cosine
+    # for unrelated banking text sits ~0.40-0.55, so 0.42 let misfires through
+    # (see docs/root-cause-exchange-rate-citations.md).
+    semantic_intent_min_score: float = 0.58
+    # Require the semantic winner to beat the runner-up intent by this margin;
+    # flat similarity bands (title-like brand queries) must not route.
+    semantic_intent_margin: float = 0.05
     minilm_intent_fallback_enabled: bool = False
     minilm_intent_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     gliner_enabled: bool = False

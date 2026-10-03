@@ -132,10 +132,14 @@ INTENT_PROTOTYPES: dict[str, dict[str, tuple[str, ...]]] = {
         "ar": (
             "الأهلي نت موبايل بانكنج انترنت بنكي",
             "خدمات رقمية تطبيق البنك",
+            "الأهلي نت خدمة الانترنت البنكي باقات والتطبيق",
+            "الأهلي بوينتس برنامج نقاط ومكافآت العملاء",
         ),
         "en": (
             "internet banking mobile banking digital services",
             "NBE online banking app login",
+            "Al Ahly Net internet banking service packages",
+            "Al Ahly Points loyalty program rewards",
         ),
     },
     "offers": {
@@ -151,8 +155,14 @@ INTENT_PROTOTYPES: dict[str, dict[str, tuple[str, ...]]] = {
         "en": ("annual report financial statements NBE",),
     },
     "corporate": {
-        "ar": ("خدمات الشركات قطاع الشركات",),
-        "en": ("corporate banking business banking",),
+        "ar": (
+            "خدمات الشركات قطاع الشركات",
+            "الأهلي بيزنس خدمات الشركات والقطاعات المختلفة",
+        ),
+        "en": (
+            "corporate banking business banking",
+            "Al Ahly Business banking for companies and business sectors",
+        ),
     },
     "sme": {
         "ar": ("المشروعات الصغيرة والمتوسطة تمويل المنشآت",),

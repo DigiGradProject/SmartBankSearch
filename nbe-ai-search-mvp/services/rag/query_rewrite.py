@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 
 import httpx
 
@@ -38,6 +39,39 @@ class RewriteResult:
     used_llm: bool = False
 
 
+@lru_cache(maxsize=256)
+def _expansion_allowed_cached(text: str, language: str, intent_expand: str) -> bool:
+    """Memoized expansion gate (deterministic per normalized text)."""
+    from services.rag.intent_fallback import classify_with_fallback
+
+    # Re-classification is cheap (regex first; semantic prototypes are cached
+    # embeddings) and keeps this helper self-contained.
+    intent = classify_with_fallback(text, language)
+    if intent.source in ("critical", "regex"):
+        return True
+    return intent.confidence >= settings.semantic_intent_high_confidence
+
+
+def _expansion_allowed(language: str, intent_expand: str) -> bool:
+    """Only confident intents may append their expansion to the search query.
+
+    Mid-band semantic wins (e.g. a title-like query matching 'exchange_rate'
+    at ~0.52 cosine) must NOT inject their expansion tokens — that poisoned
+    retrieval toward the ExchangeRates page (see
+    docs/root-cause-exchange-rate-citations.md). Regex/critical matches are
+    deterministic and always allowed; semantic wins must clear the high band.
+    """
+    if not intent_expand:
+        return False
+    return _expansion_allowed_cached(
+        _last_normalized_query.get("text", ""), language, intent_expand
+    )
+
+
+# Set by _rule_rewrite so the gate can inspect the same normalized text.
+_last_normalized_query: dict[str, str] = {}
+
+
 def _rule_rewrite(query: str, language: str, intent_expand: str) -> tuple[str, EntityExtractionResult]:
     text = query.strip()
     if language == "ar":
@@ -45,10 +79,11 @@ def _rule_rewrite(query: str, language: str, intent_expand: str) -> tuple[str, E
         for pattern, replacement in COLLOQUIAL_MAP:
             text = pattern.sub(replacement, text)
 
+    _last_normalized_query["text"] = text
     entities = extract_entities(text, language)
     expanded = expand_query(text, language)
     expanded = expand_with_synonyms(expanded, language)
-    if intent_expand and intent_expand not in expanded:
+    if _expansion_allowed(language, intent_expand) and intent_expand not in expanded:
         expanded = f"{expanded} {intent_expand}".strip()
 
     hints: list[str] = []

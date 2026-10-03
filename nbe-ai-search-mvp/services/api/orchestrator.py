@@ -68,14 +68,26 @@ def _cached_response_is_supported(
     response: SearchResponse,
     retrieval: RetrievalResult,
 ) -> bool:
-    """Accept cached answers only when current retrieval supports a cited URL."""
-    current_urls = {canonical_url_key(chunk.url) for chunk in retrieval.chunks if chunk.url}
+    """Accept cached answers only when the current TOP source backs the citations.
+
+    Requiring merely *any* URL overlap let poisoned entries survive: a cached
+    answer citing a wrong dominant page was accepted whenever that page was
+    still retrieved anywhere in the pool (see
+    docs/root-cause-exchange-rate-citations.md). Requiring the top current
+    chunk's URL to appear among the cached citations ties replay to the page
+    the answer is actually about.
+    """
+    if not response.citations or not retrieval.chunks:
+        return False
+    top_url = canonical_url_key(retrieval.chunks[0].url or "")
+    if not top_url:
+        return False
     cached_urls = {
         canonical_url_key(citation.url)
         for citation in response.citations
         if citation.url
     }
-    return bool(current_urls & cached_urls)
+    return top_url in cached_urls
 
 
 def merge_retrieval_results(results: list[RetrievalResult]) -> RetrievalResult:
