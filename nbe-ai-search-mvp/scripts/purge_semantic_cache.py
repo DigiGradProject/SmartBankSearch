@@ -8,6 +8,9 @@ docs/root-cause-exchange-rate-citations.md.
 Usage:
     .venv/bin/python scripts/purge_semantic_cache.py          # dry-run
     .venv/bin/python scripts/purge_semantic_cache.py --apply  # delete
+    .venv/bin/python scripts/purge_semantic_cache.py --all --apply   # wipe all
+      (use after intent/routing changes: stale cached answers would otherwise
+       keep replaying pre-fix behaviour)
 """
 
 from __future__ import annotations
@@ -35,6 +38,11 @@ def is_poisoned(urls: list[str]) -> tuple[bool, str]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--apply", action="store_true", help="Actually delete")
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Select every entry (wipe the cache, it rebuilds on the fly)",
+    )
     args = parser.parse_args()
 
     from shared.config import settings
@@ -58,6 +66,10 @@ def main() -> int:
     for cache_id, meta in zip(ids, metas):
         meta = meta or {}
         query = str(meta.get("query", "?"))
+        if args.all:
+            print(f"ALL       {query[:60]!r}")
+            to_delete.append(cache_id)
+            continue
         try:
             urls = json.loads(meta.get("urls") or "[]")
         except json.JSONDecodeError:

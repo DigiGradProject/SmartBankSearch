@@ -58,10 +58,17 @@ INTENT_PROTOTYPES: dict[str, dict[str, tuple[str, ...]]] = {
             "قرض شخصي تمويل أفراد قسط شهري",
             "شروط القرض الشخصي بدون ضامن",
             "تمويل استهلاكي للموظفين",
+            "قرض سيارات تمويل شراء سيارة بالتقسيط",
+            "تمويل شراء عربية جديدة أو مستعملة من البنك",
+            "مبادرات البنك المركزي المصري للتمويل العقاري",
+            "تمويل عقاري بفائدة منخفضة لدعم الإسكان",
         ),
         "en": (
             "personal loan unsecured consumer financing",
             "retail loan installments eligibility NBE",
+            "car loan auto vehicle financing installments",
+            "loan to buy a new or used car",
+            "CBE mortgage finance initiative low income housing",
         ),
     },
     "credit_card": {
@@ -87,7 +94,12 @@ INTENT_PROTOTYPES: dict[str, dict[str, tuple[str, ...]]] = {
         ),
     },
     "debit_card": {
-        "ar": ("بطاقة خصم مباشر debit card",),
+        "ar": (
+            "بطاقة خصم مباشر debit card",
+            "بطاقات الخصم المباشر",
+            "بطاقات الخصم المباشر سحب نقدي من الصراف الآلي",
+            "بطاقة خصم للتسوق والسحب النقدي",
+        ),
         "en": ("debit card direct debit NBE",),
     },
     "account_open": {
@@ -101,6 +113,7 @@ INTENT_PROTOTYPES: dict[str, dict[str, tuple[str, ...]]] = {
             "open bank account required documents current account",
             "resident account onboarding checklist EGP account",
             "steps to open a savings account NBE",
+            "savings account interest rate profit features",
         ),
     },
     "branch_locator": {
@@ -140,6 +153,7 @@ INTENT_PROTOTYPES: dict[str, dict[str, tuple[str, ...]]] = {
             "NBE online banking app login",
             "Al Ahly Net internet banking service packages",
             "Al Ahly Points loyalty program rewards",
+            "NBE Mobile app Al Ahly Mobile banking application for smartphones",
         ),
     },
     "offers": {
@@ -169,8 +183,14 @@ INTENT_PROTOTYPES: dict[str, dict[str, tuple[str, ...]]] = {
         "en": ("SME small medium enterprises financing",),
     },
     "faq": {
-        "ar": ("أسئلة شائعة FAQ",),
-        "en": ("frequently asked questions help center",),
+        "ar": (
+            "أسئلة شائعة FAQ",
+            "الأسئلة الشائعة واستفسارات العملاء",
+        ),
+        "en": (
+            "frequently asked questions help center",
+            "FAQ list of common customer questions",
+        ),
     },
 }
 

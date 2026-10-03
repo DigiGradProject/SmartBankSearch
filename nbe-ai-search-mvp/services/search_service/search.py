@@ -305,7 +305,7 @@ class SearchService:
             chunks = chunks[: settings.rerank_keep_size]
         rerank_ms = (time.perf_counter() - t_rerank) * 1000.0
 
-        breakdown = compute_confidence(chunks, llm_confidence=0.0, intent=intent)
+        breakdown = compute_confidence(chunks, llm_confidence=0.0, intent=intent, query=normalized_query)
         legacy = _compute_confidence(chunks, expanded_query, resolved_language)
         confidence = round(min(1.0, breakdown.final * 0.75 + legacy * 0.25), 3)
         confidence_reason = breakdown.reason

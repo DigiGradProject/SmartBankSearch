@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
+import re
 
 from ingestion.embedding.vector_store import RetrievedChunk
 from services.search_service.intent_classifier import QueryIntent
+from services.search_service.keyword_rank import extract_query_terms
+from shared.arabic_normalize import normalize_arabic
+from shared.config import settings
 from shared.url_canonical import canonical_url_key
 
 
@@ -127,6 +131,25 @@ def _build_reason(
     )
 
 
+def _title_covers_query(title: str, query: str) -> bool:
+    """True when the top chunk's title contains every query content term.
+
+    An exact page-title match ("الأسئلة الشائعة" == query) is strong answer
+    evidence even when the page body is thin and the reranker score is low.
+    """
+    language = "ar" if any(ord(ch) > 127 for ch in query) else "en"
+    generic = {"what", "which", "who", "national", "bank", "egypt", "nbe", "is", "the", "a", "of"}
+    terms = [t for t in extract_query_terms(query, language) if t not in generic]
+    if not terms:
+        return False
+    norm_title = normalize_arabic(title) if language == "ar" else title.lower()
+    if not norm_title:
+        return False
+    if language == "ar":
+        return all(term in norm_title for term in terms)
+    return all(re.search(rf"\b{re.escape(term)}\b", norm_title) for term in terms)
+
+
 def compute_confidence(
     chunks: list[RetrievedChunk],
     *,
@@ -134,6 +157,7 @@ def compute_confidence(
     embedding_similarity: float | None = None,
     intent: QueryIntent | None = None,
     bm25_score: float | None = None,
+    query: str = "",
 ) -> ConfidenceBreakdown:
     """
     Calibrated confidence:
@@ -177,6 +201,12 @@ def compute_confidence(
 
     if intent and intent.confidence >= 0.9 and meta == 0.0:
         final = _clamp(final * 0.55)
+
+    # Exact page-title match: the user's words name the page itself. Thin FAQ
+    # pages rerank low but are clearly the right source — floor the confidence.
+    floor = settings.title_match_confidence_floor
+    if query and floor > 0 and _title_covers_query(getattr(top, "title", "") or "", query):
+        final = _clamp(max(final, floor))
 
     reason = _build_reason(
         intent=intent,

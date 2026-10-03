@@ -1,6 +1,8 @@
 import re
 from dataclasses import dataclass
 
+from shared.arabic_normalize import normalize_arabic
+
 from ingestion.embedding.vector_store import RetrievedChunk
 from services.context_builder.compressor import compress_chunks
 from shared.config import settings
@@ -77,6 +79,58 @@ def _is_offtopic_head(query: str, head: RetrievedChunk) -> bool:
     return hits == 0
 
 
+_CITATION_TIE_EPSILON = 0.02
+
+
+def _citation_title_score(query: str, chunk: RetrievedChunk) -> tuple[int, float, float]:
+    """Relevance signals used ONLY to break score ties between citations.
+
+    The reranker saturates (many product pages score 1.0), so citation order
+    degenerates to retrieval input order. When scores tie we prefer:
+      1. title containing the full normalized query phrase (e.g. the AR page
+         titled "شهادات بلادي" for the query "شهادات بلادي"), then
+      2. the larger fraction of query terms covered by the chunk BODY
+         (a Belady page body mentions both "شهادات" and "بلادي"; the generic
+         certificates page body only "شهادات"), then
+      3. the larger share of title content tokens covered by query terms
+         ("Al Ahly Mobile" beats "Al Ahly Mobile Corporate" for "NBE mobile app").
+    Site-template tokens (national/bank/egypt/البنك/الأهلي/…) are ignored.
+    """
+    language = "ar" if any(ord(ch) > 127 for ch in query) else "en"
+    generic = {
+        "what", "which", "who", "national", "bank", "egypt", "nbe", "of", "the", "and", "for",
+        "بنك", "البنك", "اهلي", "الاهلي", "مصري", "المصري", "بنك مصر",
+    }
+    terms = [t for t in extract_query_terms(query, language) if t not in generic]
+    title = (getattr(chunk, "title", "") or "").strip()
+    if not terms or not title:
+        return 0, 0.0, 0.0
+
+    norm_title = normalize_arabic(title) if language == "ar" else title.lower()
+    norm_body = normalize_arabic(chunk.text or "") if language == "ar" else (chunk.text or "").lower()
+    norm_query = normalize_arabic(query) if language == "ar" else query.lower()
+    phrase = 1 if norm_query.strip() and norm_query.strip() in norm_title else 0
+
+    if language == "ar":
+        title_matched = sum(1 for term in terms if term in norm_title)
+        body_matched = sum(1 for term in terms if term in norm_body)
+    else:
+        title_matched = sum(
+            1 for term in terms if re.search(rf"\b{re.escape(term)}\b", norm_title)
+        )
+        body_matched = sum(
+            1 for term in terms if re.search(rf"\b{re.escape(term)}\b", norm_body)
+        )
+    body_cov = body_matched / len(terms)
+    title_tokens = [
+        t
+        for t in re.findall(r"[\w']+", norm_title)
+        if t not in generic and len(t) >= 2
+    ]
+    ratio = title_matched / max(1, len(title_tokens))
+    return phrase, round(body_cov, 3), round(ratio, 3)
+
+
 class ContextBuilder:
     def build(
         self,
@@ -117,13 +171,20 @@ class ContextBuilder:
         if not chunks:
             return []
 
-        ranked = sorted(
-            [chunk for chunk in chunks if _is_citable(chunk)],
-            key=lambda chunk: (
-                -chunk.score,
+        citable = [chunk for chunk in chunks if _is_citable(chunk)]
+        decorated = [
+            (
+                -round(chunk.score / _CITATION_TIE_EPSILON) * _CITATION_TIE_EPSILON,
+                -_citation_title_score(query, chunk)[0],
+                -_citation_title_score(query, chunk)[1],
+                -_citation_title_score(query, chunk)[2],
                 -(1 if getattr(chunk, "category", "") else 0),
-            ),
-        )
+                chunk,
+            )
+            for chunk in citable
+        ]
+        decorated.sort(key=lambda item: item[:5])
+        ranked = [item[-1] for item in decorated]
         if not ranked:
             return []
 
@@ -153,6 +214,13 @@ class ContextBuilder:
             # The anchor is the best on-topic evidence for this answer;
             # admit it (and near-ties) even below the global floor.
             citation_floor = min(citation_floor, top_score)
+
+        # Exact page-title match: the user's words name this page (e.g. thin
+        # FAQ pages whose bodies rerank low). The answer would otherwise come
+        # with zero citations because the global floor filters the only
+        # relevant chunk out. Same re-anchoring principle as above.
+        if ranked and _citation_title_score(query, ranked[0])[0] == 1:
+            citation_floor = min(citation_floor, ranked[0].score)
 
         citations: list[Citation] = []
         seen_urls: set[str] = set()

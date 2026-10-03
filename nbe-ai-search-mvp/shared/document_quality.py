@@ -15,8 +15,11 @@ LOW_VALUE_DOC_PATTERN = re.compile(
 )
 
 # ProductDetails pages that exist in menus but render empty on the live NBE site.
+# NOTE: only the "Belady USD" variants render empty — the Euro/Sterling/EGP
+# Belady pages have real content and must stay citable (a "شهادات بلادي"
+# query should cite the actual Belady pages, not just the parent category).
 BROKEN_CITATION_URL_PATTERN = re.compile(
-    r"(?i)ProductDetails.*(Belady%20USD|Belady USD|beladyoneyear|beladythreeyears|beladyfiveyears)",
+    r"(?i)ProductDetails.*(Belady%20USD|Belady USD)",
 )
 
 OFFICIAL_CATEGORY_IDS = (
