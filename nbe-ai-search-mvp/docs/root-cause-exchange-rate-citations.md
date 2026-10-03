@@ -198,11 +198,16 @@ There is no document, alias table, or intent for NBE brand product names ("Al Ah
 Tests: 137 unit tests pass, including new regression suite
 `tests/unit/test_exchange_rate_citation_regression.py`.
 
-### Known separate issue (not fixed here)
+### Known separate issue (now fixed)
 
-`services/context_builder/compressor.py::_char_jaccard` compares **character
-sets**, so any two fluent English paragraphs score ≥ 0.82 (both cover the full
-alphabet) and the compressor collapses most English chunks into one. This
-shrinks LLM context for English queries and was worked around in the citation
-tests via `compress=False`; it deserves its own fix (e.g., token n-gram
-shingles).
+`services/context_builder/compressor.py::_char_jaccard` compared **character
+sets**, so any two fluent English paragraphs scored ≥ 0.82 (both cover the full
+alphabet) and the compressor collapsed most English chunks into one. This
+shrunk LLM context for English queries and was worked around in the citation
+tests via `compress=False`.
+
+**Fixed** by replacing it with word 3-gram shingle Jaccard
+(`_shingle_jaccard`): distinct fluent paragraphs now score ~0.0–0.2 and are
+kept, while true near-duplicates still score high and are deduplicated. The
+`compress=False` workaround in the citation regression tests was removed so
+they run through the real compression path again.
