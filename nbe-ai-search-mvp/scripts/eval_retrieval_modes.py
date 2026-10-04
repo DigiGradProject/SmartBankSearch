@@ -14,6 +14,7 @@ import json
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -28,6 +29,7 @@ from scripts.eval_metrics import (  # noqa: E402
 )
 from services.rag.intent_fallback import classify_with_fallback  # noqa: E402
 from services.search_service.search import SearchService  # noqa: E402
+from services.search_service.traditional import TraditionalSearchService  # noqa: E402
 from shared.config import settings  # noqa: E402
 from shared.retrieval_mode import RetrievalMode  # noqa: E402
 
@@ -52,8 +54,12 @@ def _confidence_ok(case: dict, retrieval) -> bool:
     hit = any(expected in (url or "") for url in top3)
     if hit:
         return retrieval.confidence >= settings.confidence_threshold * 0.85
-    # Miss: preferably abstain / low confidence in ENTERPRISE; soft check in PURE.
-    if retrieval.retrieval_mode == RetrievalMode.PURE_SEMANTIC.value:
+    # Miss: preferably abstain / low confidence in ENTERPRISE; soft check in
+    # PURE and KEYWORD (a results list is not an answer — no abstention contract).
+    if retrieval.retrieval_mode in {
+        RetrievalMode.PURE_SEMANTIC.value,
+        RetrievalMode.KEYWORD.value,
+    }:
         return True
     return (not retrieval.should_answer) or (
         retrieval.confidence < settings.confidence_threshold + 0.15
@@ -67,6 +73,7 @@ def evaluate_cases(
     top_k: int = 5,
 ) -> dict:
     service = SearchService()
+    traditional = TraditionalSearchService()
     rows: list[dict] = []
 
     for case in cases:
@@ -80,12 +87,23 @@ def evaluate_cases(
         intent_ok = intent.intent == expected_intent
 
         t0 = time.perf_counter()
-        retrieval = service.retrieve(
-            query,
-            language,
-            retrieval_mode=mode,
-            business_rules=(mode == RetrievalMode.ENTERPRISE),
-        )
+        if mode == RetrievalMode.KEYWORD:
+            # BM25-only page search: no LLM, no reranker, no gate.
+            outcome = traditional.search(query, language)
+            retrieval = SimpleNamespace(
+                chunks=outcome.results,
+                confidence=1.0 if outcome.results else 0.0,
+                should_answer=bool(outcome.results),
+                retrieval_mode=RetrievalMode.KEYWORD.value,
+                business_rules_applied=False,
+            )
+        else:
+            retrieval = service.retrieve(
+                query,
+                language,
+                retrieval_mode=mode,
+                business_rules=(mode == RetrievalMode.ENTERPRISE),
+            )
         latency_ms = (time.perf_counter() - t0) * 1000.0
 
         urls = [chunk.url for chunk in retrieval.chunks[: max(top_k, 5)]]
@@ -181,7 +199,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--mode",
-        choices=["PURE_SEMANTIC", "ENTERPRISE", "both"],
+        choices=["PURE_SEMANTIC", "ENTERPRISE", "KEYWORD", "both", "all"],
         default="both",
     )
     parser.add_argument("--report", action="store_true")
@@ -202,7 +220,11 @@ def main() -> None:
     modes = (
         [RetrievalMode.PURE_SEMANTIC, RetrievalMode.ENTERPRISE]
         if args.mode == "both"
-        else [RetrievalMode(args.mode)]
+        else (
+            [RetrievalMode.PURE_SEMANTIC, RetrievalMode.ENTERPRISE, RetrievalMode.KEYWORD]
+            if args.mode == "all"
+            else [RetrievalMode(args.mode)]
+        )
     )
 
     for mode in modes:

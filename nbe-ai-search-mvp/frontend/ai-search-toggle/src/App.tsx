@@ -19,6 +19,17 @@ type SearchSuggestion = {
   score?: number | null;
 };
 
+type TraditionalResult = {
+  title: string;
+  url: string;
+  snippet: string;
+  score: number;
+  terms: string[];
+  language: "ar" | "en";
+  category?: string | null;
+  doc_type?: string | null;
+};
+
 type SearchResponse = {
   answer: string | null;
   confidence: number;
@@ -32,6 +43,9 @@ type SearchResponse = {
   query_hash?: string | null;
   cache_hit?: boolean;
   faithfulness?: string | null;
+  mode?: "ai" | "traditional";
+  results?: TraditionalResult[];
+  total_results?: number;
 };
 
 type AutocompleteResponse = {
@@ -42,6 +56,27 @@ type AutocompleteResponse = {
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 const AUTOCOMPLETE_DEBOUNCE_MS = 250;
+const TRAD_PAGE_SIZE = 10;
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function highlightTerms(text: string, terms: string[]): ReactNode {
+  if (!text) return text;
+  const unique = Array.from(new Set(terms.filter((term) => term && term.length >= 2)));
+  if (unique.length === 0) return text;
+  // Longer terms first so stems never shadow their full forms mid-word.
+  unique.sort((a, b) => b.length - a.length);
+  const pattern = new RegExp(`(${unique.map(escapeRegExp).join("|")})`, "gi");
+  return text.split(pattern).map((part, index) =>
+    index % 2 === 1 ? (
+      <mark key={`${part}-${index}`} className="trad-hl">{part}</mark>
+    ) : (
+      <span key={`plain-${index}`}>{part}</span>
+    )
+  );
+}
 
 const DEFAULT_SUGGESTIONS_EN: SearchSuggestion[] = [
   { query: "How can I open a current account?", label: "Open a current account" },
@@ -258,6 +293,9 @@ export default function App() {
   const [showAutocomplete, setShowAutocomplete] = useState(false);
   const [activeSuggestion, setActiveSuggestion] = useState(-1);
   const [lastSubmittedQuery, setLastSubmittedQuery] = useState("");
+  const [tradResults, setTradResults] = useState<TraditionalResult[]>([]);
+  const [tradTotal, setTradTotal] = useState(0);
+  const [tradNoResults, setTradNoResults] = useState(false);
   const blurTimeoutRef = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -273,6 +311,16 @@ export default function App() {
   useEffect(() => {
     document.documentElement.lang = uiLang;
   }, [uiLang]);
+
+  // Switching modes resets the previous mode's output.
+  useEffect(() => {
+    setResult(null);
+    setTradResults([]);
+    setTradTotal(0);
+    setTradNoResults(false);
+    setError(null);
+    setFeedbackSent(null);
+  }, [mode]);
 
   async function sendFeedback(vote: "helpful" | "not_helpful") {
     if (!result?.query_hash || feedbackSent) return;
@@ -296,12 +344,6 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (mode !== "ai") {
-      setAutocompleteItems([]);
-      setShowAutocomplete(false);
-      return;
-    }
-
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       try {
@@ -309,6 +351,7 @@ export default function App() {
           q: query,
           language: "auto",
           limit: "8",
+          mode,
         });
         const response = await fetch(`${API_BASE}/v1/autocomplete?${params.toString()}`, {
           signal: controller.signal,
@@ -332,25 +375,39 @@ export default function App() {
     };
   }, [query, mode]);
 
-  async function runSearch(searchQuery: string) {
+  async function runSearch(searchQuery: string, searchMode: SearchMode = mode) {
     setLoading(true);
     setError(null);
     setResult(null);
+    setTradResults([]);
+    setTradTotal(0);
+    setTradNoResults(false);
     setFeedbackSent(null);
     setLastSubmittedQuery(searchQuery);
     setShowAutocomplete(false);
 
+    const traditional = searchMode === "traditional";
     try {
       const response = await fetch(`${API_BASE}/v1/search`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: searchQuery, language: "auto" }),
+        body: JSON.stringify(
+          traditional
+            ? { query: searchQuery, language: "auto", mode: "traditional", limit: TRAD_PAGE_SIZE, offset: 0 }
+            : { query: searchQuery, language: "auto" }
+        ),
       });
       if (!response.ok) {
         throw new Error(`Search failed (${response.status})`);
       }
       const payload = (await response.json()) as SearchResponse;
-      setResult(payload);
+      if (traditional) {
+        setTradResults(payload.results ?? []);
+        setTradTotal(payload.total_results ?? 0);
+        setTradNoResults((payload.results ?? []).length === 0);
+      } else {
+        setResult(payload);
+      }
       setQuery(searchQuery);
     } catch {
       setError(isArabic ? "يرجى إعادة المحاولة." : "Please try your search again.");
@@ -359,15 +416,42 @@ export default function App() {
     }
   }
 
+  async function loadMoreTraditional() {
+    if (loading || tradResults.length === 0) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE}/v1/search`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: lastSubmittedQuery || query,
+          language: "auto",
+          mode: "traditional",
+          limit: TRAD_PAGE_SIZE,
+          offset: tradResults.length,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error("Load more failed");
+      }
+      const payload = (await response.json()) as SearchResponse;
+      const more = payload.results ?? [];
+      setTradResults((current) => {
+        const seen = new Set(current.map((item) => item.url));
+        return [...current, ...more.filter((item) => !seen.has(item.url))];
+      });
+      setTradTotal(payload.total_results ?? tradTotal);
+    } catch {
+      setError(isArabic ? "تعذّر تحميل المزيد." : "Could not load more results.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleSearch(event: React.FormEvent) {
     event.preventDefault();
     if (!query.trim()) return;
-
-    if (mode === "traditional") {
-      setResult(null);
-      setError(null);
-      return;
-    }
 
     await runSearch(query);
   }
@@ -576,7 +660,7 @@ export default function App() {
                     <IconSearch size={18} />
                     <span>{loading ? (ar ? "جارٍ البحث" : "Searching") : (ar ? "بحث" : "Search")}</span>
                   </button>
-                  {mode === "ai" && showAutocomplete && autocompleteItems.length > 0 && (
+                  {showAutocomplete && autocompleteItems.length > 0 && (
                     <ul id="search-autocomplete" className="autocomplete-list" role="listbox">
                       {autocompleteItems.map((item, index) => (
                         <li key={`${item.query}-${item.label}`} role="option" aria-selected={index === activeSuggestion}>
@@ -669,15 +753,74 @@ export default function App() {
                 </div>
               )}
 
-              {mode === "traditional" && !loading && !result && !error && (
+              {mode === "traditional" && !loading && !error && tradResults.length > 0 && (
+                <section className="traditional-results" aria-live="polite">
+                  <div className="section-heading">
+                    <span className="section-icon" aria-hidden="true"><IconSearch size={13} /></span>
+                    <h3>
+                      {ar
+                        ? `${tradTotal} نتيجة من صفحات البنك الأهلي`
+                        : `${tradTotal} results from NBE pages`}
+                    </h3>
+                  </div>
+                  <div className="trad-list">
+                    {tradResults.map((item) => (
+                      <a
+                        key={item.url}
+                        className="trad-card"
+                        dir={item.language === "ar" ? "rtl" : "ltr"}
+                        href={item.url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <span className="trad-title">{highlightTerms(item.title, item.terms)}</span>
+                        {item.snippet && (
+                          <span className="trad-snippet">{highlightTerms(item.snippet, item.terms)}</span>
+                        )}
+                        <span className="trad-meta">
+                          {item.category && <span className="trad-chip">{item.category}</span>}
+                          <span className="trad-lang">{item.language === "ar" ? "عربي" : "English"}</span>
+                          <span className="trad-score">{Math.round(item.score * 100)}%</span>
+                          <span className="trad-arrow" aria-hidden="true"><IconArrowUpRight size={13} /></span>
+                        </span>
+                      </a>
+                    ))}
+                  </div>
+                  {tradResults.length < tradTotal && (
+                    <button
+                      type="button"
+                      className="load-more"
+                      onClick={() => void loadMoreTraditional()}
+                    >
+                      {ar ? "عرض المزيد من النتائج" : "Load more results"}
+                    </button>
+                  )}
+                </section>
+              )}
+
+              {mode === "traditional" && !loading && !error && tradNoResults && (
+                <div className="notice-state" role="status">
+                  <span className="state-icon" aria-hidden="true"><IconSearch size={18} /></span>
+                  <div className="state-copy">
+                    <strong>{ar ? "لا توجد نتائج مطابقة" : "No matching pages"}</strong>
+                    <p>
+                      {ar
+                        ? "جرّب كلمات مفتاحية أقل أو مختلفة، أو استخدم البحث الذكي."
+                        : "Try fewer or different keywords, or use AI Search."}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {mode === "traditional" && !query.trim() && tradResults.length === 0 && (
                 <div className="notice-state" role="status">
                   <span className="state-icon" aria-hidden="true"><IconInfo size={18} /></span>
                   <div className="state-copy">
                     <strong>{ar ? "البحث التقليدي" : "Traditional Search"}</strong>
                     <p>
                       {ar
-                        ? "البحث بالكلمات المفتاحية متاح على موقع البنك الأهلي المصري الرسمي."
-                        : "Traditional keyword search remains on the existing NBE website."}
+                        ? "ابحث بالكلمات المفتاحية في صفحات البنك الأهلي المصري المفهرسة."
+                        : "Keyword search across NBE's indexed pages."}
                     </p>
                   </div>
                 </div>

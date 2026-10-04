@@ -73,10 +73,15 @@ Without Ollama, the API uses an extractive fallback grounded in retrieved chunks
 
 ## API
 
-- `POST /v1/search` — semantic search
-- `GET /v1/health` — component health
-- `POST /v1/admin/ingest` — trigger batch ingestion
+- `POST /v1/search` — search; `mode` field selects the engine:
+  - `mode: "ai"` (default) — full semantic RAG: hybrid retrieval → reranker → LLM answer + citations
+  - `mode: "traditional"` — BM25 keyword results (no LLM): `{ results: [{title, url, snippet, score, terms, language, category, doc_type}], total_results, ... }` with optional `limit`/`offset` pagination
+- `GET /v1/autocomplete?q=...&mode=ai|traditional` — suggestions (traditional mode uses a fast catalog-only path)
+- `GET /v1/health` — component health (`vector_db`, `llm`, `api`, `bm25`)
+- `POST /v1/admin/ingest` — trigger batch ingestion (also rebuilds the BM25 index)
 - `GET /v1/admin/ingest/status/{runId}` — ingestion status
+
+Design & status: [`docs/plan-traditional-search.md`](docs/plan-traditional-search.md)
 
 ## Project Layout
 

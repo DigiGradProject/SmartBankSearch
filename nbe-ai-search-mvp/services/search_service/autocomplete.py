@@ -5,8 +5,8 @@ from __future__ import annotations
 import re
 
 from ingestion.embedding.vector_store import RetrievedChunk, VectorStore
+from services.rag.language import detect_language, prepare_query
 from services.search_service.keyword_rank import extract_query_terms, keyword_overlap_score
-from services.search_service.language import detect_language, prepare_query
 from services.search_service.query_catalog import TOPIC_QUERIES_AR, TOPIC_QUERIES_EN, catalog_for_language
 from services.search_service.query_expand import expand_query, expand_query_intent
 from shared.arabic_normalize import normalize_arabic
@@ -135,8 +135,17 @@ def build_autocomplete(
     language: str = "auto",
     limit: int = 8,
     vector_store: VectorStore | None = None,
+    *,
+    catalog_only: bool = False,
 ) -> list[SearchSuggestion]:
-    store = vector_store or VectorStore()
+    """Suggest queries while typing.
+
+    catalog_only=True skips the vector-store semantic pass — used by the
+    traditional-search UX to keep keystroke latency low. The store must be
+    created lazily: VectorStore() eagerly builds a Chroma client and loads
+    the BGE-M3 embedder, which catalog-only keystrokes must never pay for.
+    """
+    store = None if catalog_only else (vector_store or VectorStore())
     resolved_language = detect_language(query, language)
     trimmed = query.strip()
 
@@ -165,10 +174,15 @@ def build_autocomplete(
         )
         seen.add(expanded.lower())
 
+    semantic_items = (
+        []
+        if catalog_only
+        else _semantic_matches(trimmed, resolved_language, store, limit)  # type: ignore[arg-type]
+    )
     for item in (
         _topic_matches(trimmed, resolved_language)
         + _catalog_matches(trimmed, resolved_language, limit)
-        + _semantic_matches(trimmed, resolved_language, store, limit)
+        + semantic_items
     ):
         key = item.query.lower().strip()
         if not key or key in seen:

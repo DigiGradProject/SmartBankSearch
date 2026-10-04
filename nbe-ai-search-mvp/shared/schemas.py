@@ -51,6 +51,12 @@ class SearchRequest(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
     language: Literal["ar", "en", "auto"] = "auto"
     debug: bool = False
+    # "ai" = full semantic RAG pipeline (default, unchanged behavior);
+    # "traditional" = BM25 keyword results, no LLM.
+    mode: Literal["ai", "traditional"] = "ai"
+    # Traditional-mode pagination (ignored by AI mode).
+    limit: int | None = Field(default=None, ge=1, le=50)
+    offset: int = Field(default=0, ge=0)
 
 
 class AutocompleteResponse(BaseModel):
@@ -65,6 +71,19 @@ class Citation(BaseModel):
     category: str | None = None
     relevance_score: float | None = None
     reranker_score: float | None = None
+
+
+class TraditionalResult(BaseModel):
+    """One page-level result of traditional (keyword) search."""
+
+    title: str
+    url: str
+    snippet: str = ""
+    score: float = 0.0
+    terms: list[str] = Field(default_factory=list)
+    language: Literal["ar", "en"]
+    category: str | None = None
+    doc_type: str | None = None
 
 
 class SearchSuggestion(BaseModel):
@@ -94,6 +113,10 @@ class SearchResponse(BaseModel):
     entities: list[dict[str, Any]] | None = None
     faithfulness: str | None = None
     explain: dict[str, Any] | None = None
+    # Traditional (keyword) search results — additive; empty for AI mode.
+    mode: str = "ai"
+    results: list[TraditionalResult] = Field(default_factory=list)
+    total_results: int = 0
 
 
 class FeedbackRequest(BaseModel):
@@ -115,6 +138,7 @@ class HealthComponents(BaseModel):
     vector_db: Literal["ok", "degraded", "down"]
     llm: Literal["ok", "degraded", "down"]
     api: Literal["ok", "degraded", "down"]
+    bm25: Literal["ok", "degraded", "down"] = "ok"
 
 
 class HealthResponse(BaseModel):

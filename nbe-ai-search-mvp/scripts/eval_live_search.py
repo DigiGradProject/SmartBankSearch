@@ -14,10 +14,10 @@ acceptable behaviour).
 
 Usage:
     .venv/bin/python scripts/eval_live_search.py [--base http://localhost:7000]
-        [--offset N] [--limit N] [--tag NAME] [--summary]
+        [--offset N] [--limit N] [--tag NAME] [--summary] [--mode ai|traditional]
 
 Every finished case is appended immediately to
-    data/reports/live_eval_<tag>.jsonl
+    data/reports/live_eval_<mode>_<tag>.jsonl
 so partial runs are never lost. Run several chunks with --offset/--limit,
 then print the final report with --summary.
 """
@@ -101,8 +101,14 @@ CASES: list[dict] = [
 ]
 
 
-def run_case(base: str, case: dict, timeout: float) -> dict:
-    payload = json.dumps({"query": case["q"], "language": case["l"], "debug": True}).encode()
+def run_case(base: str, case: dict, timeout: float, mode: str = "ai") -> dict:
+    body: dict = {"query": case["q"], "language": case["l"]}
+    if mode == "traditional":
+        body["mode"] = "traditional"
+        body["limit"] = 10
+    else:
+        body["debug"] = True
+    payload = json.dumps(body).encode()
     req = urllib.request.Request(
         f"{base}/v1/search",
         data=payload,
@@ -120,9 +126,18 @@ def run_case(base: str, case: dict, timeout: float) -> dict:
     latency = round(time.time() - t0, 1)
 
     citations = body.get("citations") or []
-    urls = [c.get("url") or "" for c in citations]
-    answer = (body.get("answer") or "")
-    answered = bool(body.get("answered"))
+    results = body.get("results") or []
+    if mode == "traditional":
+        # Keyword mode: results list replaces citations/answer.
+        urls = [r.get("url") or "" for r in results]
+        answer = " ".join(
+            f"{r.get('title', '')} {r.get('snippet', '')}" for r in results
+        )
+        answered = bool(results)
+    else:
+        urls = [c.get("url") or "" for c in citations]
+        answer = (body.get("answer") or "")
+        answered = bool(body.get("answered"))
     strict = case.get("strict", True)
 
     expected = case.get("exp", [])
@@ -151,13 +166,13 @@ def run_case(base: str, case: dict, timeout: float) -> dict:
         case,
         status=status,
         failed_checks=failed,
-        intent=body.get("intent"),
+        intent=body.get("intent") or ("traditional_search" if mode == "traditional" else None),
         confidence=body.get("confidence"),
         answered=answered,
         abstention_reason=body.get("abstention_reason"),
         answer=answer[:400],
         citation_urls=urls,
-        citation_titles=[c.get("title") or "" for c in citations],
+        citation_titles=[r.get("title") or "" for r in results] or [c.get("title") or "" for c in citations],
         latency=latency,
     )
 
@@ -170,6 +185,12 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=0, help="only N cases (0 = all)")
     parser.add_argument("--tag", default=datetime.now().strftime("%H%M%S"))
     parser.add_argument("--summary", action="store_true", help="print report from existing JSONL and exit")
+    parser.add_argument(
+        "--mode",
+        choices=["ai", "traditional"],
+        default="ai",
+        help="ai = full RAG answers (default); traditional = BM25 keyword results",
+    )
     args = parser.parse_args()
 
     if hasattr(sys.stdout, "reconfigure"):
@@ -177,7 +198,7 @@ def main() -> None:
 
     out_dir = ROOT / "data" / "reports"
     out_dir.mkdir(parents=True, exist_ok=True)
-    out = out_dir / f"live_eval_{args.tag}.jsonl"
+    out = out_dir / f"live_eval_{args.mode}_{args.tag}.jsonl"
 
     if args.summary:
         summarize(out)
@@ -190,7 +211,7 @@ def main() -> None:
     results = []
     with out.open("a", encoding="utf-8") as sink:
         for i, case in enumerate(cases, args.offset + 1):
-            row = run_case(args.base, case, args.timeout)
+            row = run_case(args.base, case, args.timeout, mode=args.mode)
             results.append(row)
             sink.write(json.dumps(row, ensure_ascii=False) + "\n")
             sink.flush()
