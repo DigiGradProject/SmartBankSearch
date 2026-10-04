@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     context_max_tokens: int = 2000
     confidence_threshold: float = 0.42
     citation_min_score: float = 0.45
+    # Confidence floor applied when the top chunk's title covers every query
+    # content term (exact page-title match, e.g. thin FAQ pages that rerank low).
+    title_match_confidence_floor: float = 0.55
     # A citation from a category other than the dominant one must be within
     # this gap of the top score, else it is dropped (guards against an
     # off-topic page saturating the reranker and crowding out the true source).
