@@ -518,6 +518,14 @@ input:focus-visible {
   animation: rise 180ms ease both;
 }
 
+/* Portal-rendered variant: mounted on document.body with position:fixed
+   (inline styles provide left/top/width) so no ancestor overflow or stacking
+   context can clip or cover the suggestion list. */
+.autocomplete-list--floating {
+  inset: auto;
+  z-index: 9999;
+}
+
 .autocomplete-list button {
   display: flex;
   align-items: center;

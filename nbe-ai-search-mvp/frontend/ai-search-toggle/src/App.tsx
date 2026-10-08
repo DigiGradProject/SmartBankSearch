@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { FC, ReactNode } from "react";
 
 type SearchMode = "traditional" | "ai";
@@ -298,6 +299,8 @@ export default function App() {
   const [tradNoResults, setTradNoResults] = useState(false);
   const blurTimeoutRef = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const searchBoxRef = useRef<HTMLDivElement | null>(null);
+  const [dropdownPos, setDropdownPos] = useState<{ left: number; top: number; width: number; maxHeight: number } | null>(null);
 
   const [feedbackSent, setFeedbackSent] = useState<"helpful" | "not_helpful" | null>(null);
 
@@ -311,6 +314,38 @@ export default function App() {
   useEffect(() => {
     document.documentElement.lang = uiLang;
   }, [uiLang]);
+
+  const dropdownOpen = showAutocomplete && autocompleteItems.length > 0;
+
+  // The dropdown renders in a document.body portal with position:fixed, so it
+  // can never be clipped by ancestor overflow (the search card) or stacked
+  // behind other content. Fixed positioning needs manual tracking: recompute
+  // the anchor from the search box on every scroll/resize while open.
+  useEffect(() => {
+    if (!dropdownOpen) {
+      setDropdownPos(null);
+      return;
+    }
+    const update = () => {
+      const box = searchBoxRef.current;
+      if (!box) return;
+      const rect = box.getBoundingClientRect();
+      const top = rect.bottom + 10;
+      setDropdownPos({
+        left: rect.left,
+        top,
+        width: rect.width,
+        maxHeight: Math.max(160, Math.min(300, window.innerHeight - top - 16)),
+      });
+    };
+    update();
+    window.addEventListener("scroll", update, { passive: true, capture: true });
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update, { capture: true });
+      window.removeEventListener("resize", update);
+    };
+  }, [dropdownOpen]);
 
   // Switching modes resets the previous mode's output.
   useEffect(() => {
@@ -632,7 +667,7 @@ export default function App() {
               </div>
 
               <form onSubmit={handleSearch} className="search-form">
-                <div className="search-box">
+                <div className="search-box" ref={searchBoxRef}>
                   <span className="input-icon" aria-hidden="true">
                     {mode === "ai" ? <IconSparkle size={22} /> : <IconSearch size={22} />}
                   </span>
@@ -660,31 +695,45 @@ export default function App() {
                     <IconSearch size={18} />
                     <span>{loading ? (ar ? "جارٍ البحث" : "Searching") : (ar ? "بحث" : "Search")}</span>
                   </button>
-                  {showAutocomplete && autocompleteItems.length > 0 && (
-                    <ul id="search-autocomplete" className="autocomplete-list" role="listbox">
-                      {autocompleteItems.map((item, index) => (
-                        <li key={`${item.query}-${item.label}`} role="option" aria-selected={index === activeSuggestion}>
-                          <button
-                            type="button"
-                            dir="auto"
-                            className={index === activeSuggestion ? "active" : ""}
-                            onMouseDown={(event) => event.preventDefault()}
-                            onClick={() => selectSuggestion(item)}
-                          >
-                            <span className="autocomplete-leading" aria-hidden="true"><IconSearch size={15} /></span>
-                            <span className="autocomplete-label">{item.label}</span>
-                            {item.reason === "popular" && (
-                              <span className="autocomplete-badge">
-                                {ar ? "شائع" : "Popular"}
-                              </span>
-                            )}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
                 </div>
               </form>
+
+              {dropdownOpen && dropdownPos && createPortal(
+                <ul
+                  id="search-autocomplete"
+                  className="autocomplete-list autocomplete-list--floating"
+                  role="listbox"
+                  style={{
+                    position: "fixed",
+                    left: dropdownPos.left,
+                    top: dropdownPos.top,
+                    width: dropdownPos.width,
+                    maxWidth: "calc(100vw - 24px)",
+                    maxHeight: dropdownPos.maxHeight,
+                  }}
+                >
+                  {autocompleteItems.map((item, index) => (
+                    <li key={`${item.query}-${item.label}`} role="option" aria-selected={index === activeSuggestion}>
+                      <button
+                        type="button"
+                        dir="auto"
+                        className={index === activeSuggestion ? "active" : ""}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => selectSuggestion(item)}
+                      >
+                        <span className="autocomplete-leading" aria-hidden="true"><IconSearch size={15} /></span>
+                        <span className="autocomplete-label">{item.label}</span>
+                        {item.reason === "popular" && (
+                          <span className="autocomplete-badge">
+                            {ar ? "شائع" : "Popular"}
+                          </span>
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>,
+                document.body
+              )}
 
               {mode === "ai" && (
                 <div className="popular-row">
