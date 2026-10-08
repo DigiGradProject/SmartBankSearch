@@ -83,6 +83,11 @@ _TITLE_BOOST_WEIGHT = 0.15
 _TITLE_SIMILARITY_WEIGHT = 4.0
 _TITLE_PHRASE_BONUS = 0.60
 _BODY_PHRASE_BONUS = 0.25
+# The score assigned to pages matching the query's *exact title* verbatim
+# (corporate prefix stripped, spacing variants included). Set far above any
+# realistic BM25 score so the intended page tops the ranking unconditionally;
+# ties are broken by descending BM25 score (relevance) within the tier.
+_TITLE_MATCH_SCORE = 10000.0
 
 # Corporate prefix the scraper prepends to page titles ("National Bank of
 # Egypt - Platinum"). Tokens from this prefix name the company, not the page:
@@ -121,6 +126,7 @@ def _title_match_tokens(terms: list[str], language: str) -> list[str]:
         return list(terms)
     kept = [term for term in terms if term not in prefix_tokens]
     return kept if kept else list(terms)
+
 _SNIPPET_TERM_WINDOW = 60
 
 
@@ -295,6 +301,105 @@ def _normalized_text(text: str, language: str) -> str:
     return normalize_arabic(cleaned) if language == "ar" else cleaned.lower()
 
 
+def _verify_query_titles(query: str, grouping_language: str) -> list[tuple[str, str]]:
+    """Query variants for exact-title express matching, with their language.
+
+    Spacing aliases are applied so that re-spaced brand words ("alahly" →
+    "al ahly") can still match the verbatim title word; stems add coverage
+    for loose inflections. Returns (title_variant, language) pairs.
+    """
+    base = apply_spacing_aliases(query.strip())
+    variants = [base]
+    if base != query.strip():
+        variants.append(query.strip())
+    extra: list[str] = []
+    for lang in {grouping_language, "ar", "en"}:
+        extra.extend(light_stem(token, lang) for token in base.split())
+        other = "en" if lang == "ar" else "ar"
+        extra.extend(light_stem(token, other) for token in base.split())
+    extra = [e for e in extra if e and e not in variants and len(e) >= 3]
+    variants.extend(extra)
+    # Dedup, keep original order, and mirror the display language so title
+    # matching is judged in the language where the query resolves.
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for v in variants:
+        if v not in seen:
+            seen.add(v)
+            ordered.append(v)
+    return [(v, grouping_language) for v in ordered]
+
+
+def _corpus_exact_title_pages(
+    verify_variants: list[str],
+    language: str,
+    index: BM25Index,
+) -> dict[str, tuple[IndexedChunk, float]]:
+    """Find corpus pages whose title matches a query variant verbatim.
+
+    Matching is done on fully normalized titles with the corporate prefix
+    stripped (same `_TITLE_PREFIXES` rules as autocomplete), so "National
+    Bank of Egypt - Platinum" matches a page titled "... - Platinum". BM25
+    rank never decides who enters the express tier — a body-heavy page can
+    never exclude the intended page from it.
+    """
+    if not verify_variants:
+        return {}
+    variants: dict[str, str] = {}
+    for raw_variant in verify_variants:
+        variant = _corpus_title_match_variant(raw_variant, language)
+        if variant and variant not in variants:
+            variants[variant] = raw_variant
+
+    exact: dict[str, tuple[IndexedChunk, float]] = {}
+    for chunk in index.chunks():
+        title = _corpus_title_match_variant(chunk.title, chunk.language if chunk.language in {"ar", "en"} else language)
+        if not title:
+            continue
+        match = variants.get(title)
+        if match is None:
+            continue
+        key = canonical_url_key(chunk.url) or chunk.chunk_id
+        current = exact.get(key)
+        if current is None or current[1] < 0.0:
+            exact[key] = (chunk, _TITLE_MATCH_SCORE)
+    return exact
+
+
+def _other_language_title_match(
+    variant: str,
+    other_language: str,
+    index: BM25Index,
+) -> bool:
+    """Whether an exact-title express page exists for this variant in the
+    other language — only then can fill-in grouping boost it, since self-
+    language express pages are already handled in the primary language.
+    """
+    key = _corpus_title_match_variant(variant, other_language)
+    if not key:
+        return False
+    return any(
+        _corpus_title_match_variant(c.title, c.language if c.language in {"ar", "en"} else other_language) == key
+        for c in index.chunks()
+    )
+
+
+def _corpus_title_match_variant(text: str, language: str) -> str:
+    """Normalized key for exact-title matching (prefix stripped, aliases applied)."""
+    cleaned = text.strip()
+    for prefix in _TITLE_PREFIXES:
+        if cleaned.startswith(prefix):
+            remainder = cleaned[len(prefix) :].strip()
+            # Keep generic remainders ("Home", "ارشادات") as the full string —
+            # same rule as autocomplete: they identify the page as-is.
+            is_specific = len(remainder) >= 4 and (" " in remainder or "\u0600" <= remainder[0] <= "\u06FF")
+            cleaned = remainder if is_specific else cleaned
+            break
+    lowered = cleaned.lower()
+    lowered = apply_spacing_aliases(lowered)
+    return normalize_arabic(lowered) if language == "ar" else lowered
+
+
 def _title_similarity(title: str, terms: list[str], language: str) -> float:
     """Fraction of identifying query tokens found in the normalized title.
 
@@ -380,8 +485,13 @@ def group_pages(
     terms: list[str],
     language: str,
     phrases: list[str] | None = None,
+    express_pages: dict[str, tuple[IndexedChunk, float]] | None = None,
 ) -> list[tuple[IndexedChunk, float]]:
-    """Best chunk per canonical page, title-boosted, ranked."""
+    """Best chunk per canonical page, title-boosted, ranked.
+
+    `express_pages` are corpus pages matching the query's exact title — they
+    always rank above BM25-boosted newcomers and keep their fixed score.
+    """
     best: dict[str, tuple[IndexedChunk, float]] = {}
     for chunk, score in hits:
         key = canonical_url_key(chunk.url) or chunk.chunk_id
@@ -389,6 +499,9 @@ def group_pages(
         current = best.get(key)
         if current is None or boosted > current[1]:
             best[key] = (chunk, boosted)
+    if express_pages:
+        for key, pair in express_pages.items():
+            best[key] = (pair[0], pair[1])
     return sorted(best.values(), key=lambda pair: pair[1], reverse=True)
 
 
@@ -460,8 +573,17 @@ class TraditionalSearchService:
 
         primary_phrases = kw.phrases_by_language.get(kw.language, [])
         primary_hits = index.query(kw.bm25_query, kw.language, fetch_k)
+        # Exact-title express tier: scan ALL corpus pages, not just BM25
+        # candidates, so the intended page can never be outranked by a
+        # body-heavy page merely because it mentions query words more often.
+        verify_variants = [variant for variant, _ in _verify_query_titles(query, kw.language)]
+        express_pages = _corpus_exact_title_pages(verify_variants, kw.language, index)
         pages = group_pages(
-            primary_hits, terms=primary_terms, language=kw.language, phrases=primary_phrases
+            primary_hits,
+            terms=primary_terms,
+            language=kw.language,
+            phrases=primary_phrases,
+            express_pages=express_pages,
         )
         candidates = normalize_scores(pages)
 
@@ -470,7 +592,11 @@ class TraditionalSearchService:
         # fill-in cannot inflate `total` far beyond what the user asked for.
         if len(candidates) < settings.keyword_fill_min_results:
             other_hits = index.query(kw.bm25_query, other_language, fetch_k)
-            other_pages = group_pages(other_hits, terms=other_terms, language=other_language)
+            other_verify = [v for v in verify_variants if _other_language_title_match(v, other_language, index)]
+            other_express = _corpus_exact_title_pages(other_verify, other_language, index)
+            other_pages = group_pages(
+                other_hits, terms=other_terms, language=other_language, express_pages=other_express
+            )
             candidates.extend(normalize_scores(other_pages[:page_size]))
 
         total = len(candidates)
