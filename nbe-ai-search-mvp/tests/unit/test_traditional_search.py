@@ -206,6 +206,131 @@ def test_group_pages_without_phrases_is_backward_compatible():
     assert len(pages) == 1
 
 
+# ---------------------------------------------------------------------------
+# Dominant title similarity
+# ---------------------------------------------------------------------------
+
+
+def test_group_pages_title_similarity_beats_body_frequency():
+    # User-reported case: "Platinum" must rank the Platinum page first even
+    # though the Exclusive-Products body mentions "platinum" more often.
+    exclusive = _chunk(
+        "excl",
+        "u-excl",
+        title="exclusive products",
+        text="platinum " * 40,
+    )
+    platinum = _chunk(
+        "plat",
+        "u-plat",
+        title="national bank of egypt - platinum",
+        text="platinum card benefits",
+    )
+    pages = group_pages(
+        [(exclusive, 10.0), (platinum, 5.0)],
+        terms=["platinum"],
+        language="en",
+    )
+    assert pages[0][0].chunk_id == "plat"
+
+
+def test_group_pages_full_title_match_wins_on_tie():
+    a = _chunk("a", "u-a", title="savings certificates", text="rate stuff")
+    b = _chunk("b", "u-b", title="some other page", text="savings certificates rate stuff savings")
+    pages = group_pages(
+        [(a, 3.0), (b, 3.0)],
+        terms=["savings", "certificates"],
+        language="en",
+    )
+    assert pages[0][0].chunk_id == "a"
+
+
+def test_title_similarity_ignores_corporate_prefix_tokens():
+    # "National Bank of Egypt - Platinum" must be judged by "platinum":
+    # the corporate words would otherwise dilute coverage to 1/4 everywhere.
+    from services.search_service.traditional import _title_match_tokens
+
+    assert _title_match_tokens(
+        ["national", "bank", "egypt", "platinum"], "en"
+    ) == ["platinum"]
+    # A query that is ONLY corporate words keeps them (no dilution, no crash).
+    assert _title_match_tokens(["bank"], "en") == ["bank"]
+    assert _title_match_tokens([], "en") == []
+
+
+def test_service_platinum_page_ranks_first_on_real_index():
+    svc = TraditionalSearchService()
+    outcome = svc.search("National Bank of Egypt - Platinum", "en", limit=5)
+    assert outcome.results, "expected results"
+    assert outcome.results[0].title == "National Bank of Egypt - Platinum"
+    outcome_short = svc.search("Platinum", "en", limit=5)
+    assert outcome_short.results[0].title == "National Bank of Egypt - Platinum"
+
+
+def test_exact_title_express_tier_beats_body_heavy_page():
+    # The intended page is NOT a BM25 candidate (its body/rank would place it
+    # far below); only the corpus-wide exact-title scan can surface it at #1.
+    gold = IndexedChunk(
+        chunk_id="gold", document_id="d-title",
+        title="National Bank of Egypt - Platinum",
+        url="https://www.nbe.com.eg/EN/Platinum", language="en",
+        text="cards overview", doc_type="product", category="cards",
+        is_stub=False, canonical_url_slug="",
+    )
+    body_heavy = IndexedChunk(
+        chunk_id="bulk", document_id="d-bulk",
+        title="Exclusive Products",
+        url="https://www.nbe.com.eg/EN/Exclusive", language="en",
+        text="platinum " * 30, doc_type="product", category="cards",
+        is_stub=False, canonical_url_slug="",
+    )
+    # BM25 sees ONLY the body-heavy page; `corpus` gives the exact-title
+    # scanner the full page collection it would see on the real index.
+    fake = _FakeBM25({"en": [(body_heavy, 20.0)]}, corpus=[gold, body_heavy])
+    svc = TraditionalSearchService(bm25_index=fake)
+    outcome = svc.search("National Bank of Egypt - Platinum", "en", limit=5)
+    titles = [r.title for r in outcome.results]
+    assert titles[0] == "National Bank of Egypt - Platinum"
+    assert "Exclusive Products" in titles  # still present, just below
+
+
+def test_exact_title_express_tier_fires_without_bm25_candidates():
+    gold = IndexedChunk(
+        chunk_id="gold", document_id="d-title",
+        title="National Bank of Egypt - Platinum",
+        url="https://www.nbe.com.eg/EN/Platinum", language="en",
+        text="cards overview", doc_type="product", category="cards",
+        is_stub=False, canonical_url_slug="",
+    )
+    filler = IndexedChunk(
+        chunk_id="fill", document_id="d-fill", title="Loan page",
+        url="https://www.nbe.com.eg/EN/Loans", language="en", text="loan",
+        doc_type="product", category="loans", is_stub=False, canonical_url_slug="",
+    )
+    # A non-empty BM25 hit list keeps the index "available" (size > 0) while
+    # the express tier is the only thing that can surface the gold page.
+    fake = _FakeBM25({"en": [(filler, 9.0)]}, corpus=[gold, filler])
+    svc = TraditionalSearchService(bm25_index=fake)
+    outcome = svc.search("National Bank of Egypt - Platinum", "en", limit=5)
+    assert outcome.results[0].title == "National Bank of Egypt - Platinum"
+
+
+def test_exact_title_express_generic_query_no_match():
+    # Queries without an identifying tail must not hijack generic pages: a
+    # bare "bank" query keeps its tokens and never enters the express tier.
+    home = IndexedChunk(
+        chunk_id="home", document_id="d-home",
+        title="National Bank of Egypt - Home",
+        url="https://www.nbe.com.eg/EN/Home", language="en",
+        text="welcome", doc_type="page", category="home",
+        is_stub=False, canonical_url_slug="",
+    )
+    fake = _FakeBM25({"en": []}, corpus=[home])
+    svc = TraditionalSearchService(bm25_index=fake)
+    outcome = svc.search("bank", "en", limit=5)
+    assert outcome.results == []  # express tier must stay empty
+
+
 def test_normalize_scores_range():
     pairs = [(_chunk("a", "u1"), 3.2), (_chunk("b", "u2"), 9.7)]
     normalized = normalize_scores(pairs)
@@ -305,12 +430,23 @@ def test_prepare_query_highlight_terms_exclude_stopwords():
 class _FakeBM25:
     """Minimal BM25Index stand-in for API-contract tests."""
 
-    def __init__(self, hits: dict[str, list[tuple[IndexedChunk, float]]]):
-        self._hits = hits
+    def __init__(
+        self,
+        hits: dict[str, list[tuple[IndexedChunk, float]]],
+        *,
+        corpus: list[IndexedChunk] | None = None,
+    ):
+        self._fake_hits = hits
+        self._all: list[IndexedChunk] = list(corpus) if corpus is not None else [
+            chunk for pairs in hits.values() for chunk, _ in pairs
+        ]
         self.size = sum(len(v) for v in hits.values())
 
     def query(self, query_text, language, top_k=50, *, doc_types=None):  # noqa: ANN001, ANN202
-        return self._hits.get(language, [])[:top_k]
+        return self._fake_hits.get(language, [])[:top_k]
+
+    def chunks(self) -> list[IndexedChunk]:
+        return list(self._all)
 
 
 def test_service_rejects_non_http_urls():

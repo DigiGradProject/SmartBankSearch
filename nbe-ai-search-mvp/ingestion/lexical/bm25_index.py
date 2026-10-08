@@ -154,6 +154,11 @@ class BM25Index:
             canonical_url_slug=chunk.canonical_url_slug,
         )
 
+    def chunks(self) -> list[IndexedChunk]:
+        """Read-only copy of indexed chunks — exact-title express matching
+        scans pages collection-wide, not just BM25 hit candidates."""
+        return list(self._chunks)
+
     def match_urls(
         self,
         *needles: str,
