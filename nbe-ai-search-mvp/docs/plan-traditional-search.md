@@ -215,7 +215,7 @@
 | `shared/schemas.py` | `SearchRequest.mode/limit/offset`, `TraditionalResult`, `SearchResponse.mode/results/total_results`, `HealthComponents.bm25` |
 | `services/api/main.py` | `mode="traditional"` branch in `POST /v1/search` (before the AI orchestrator — AI path untouched), kill-switch (404 when disabled), BM25 health, `TRADITIONAL_LATENCY` histogram, `mode` label on search counter, analytics + audit events, `/v1/autocomplete?mode=traditional` catalog-only fast path |
 | `services/search_service/search.py` | KEYWORD mode bypasses the decision gate (`gate_active`) |
-| `services/search_service/autocomplete.py` | `catalog_only` parameter |
+| `services/search_service/autocomplete.py` | `catalog_only` parameter; later extended with `_bm25_title_matches` (see follow-up below) |
 | `services/rag/metrics.py` | `TRADITIONAL_LATENCY` |
 | `frontend/ai-search-toggle` | Traditional tab performs real searches: result cards with highlighted snippets (`<mark>` via React nodes), category chips, per-result language/`dir`, "load more" pagination, no-results + empty states, autocomplete re-enabled in traditional mode |
 | `scripts/eval_retrieval_modes.py` | `--mode KEYWORD` / `--mode all` |
@@ -235,8 +235,6 @@
 
 The quality gap vs the semantic pipeline is the expected BM25-only trade-off; latency is ~200× faster. The goldens were written for semantic routing, so the keyword baseline has headroom via the deferred stretch items (4.5: typo tolerance, title-field BM25, phrase proximity).
 
-The quality gap vs the semantic pipeline is the expected BM25-only trade-off; latency is ~700× faster. The goldens were written for semantic routing, so the keyword baseline has headroom via the deferred stretch items (4.5: typo tolerance, title-field BM25, phrase proximity).
-
 **Deviations & lessons from implementation:**
 - **0.4 (ingest → BM25 auto-sync):** already existed in `ingestion/pipeline.py` — verified, no change needed.
 - **2.2 (orchestrator branch):** the `mode="traditional"` branch lives in `services/api/main.py` *before* `orchestrator.search()` is invoked, so `orchestrator.py` is byte-identical to pre-change — zero AI-regression surface; exact/semantic caches are never reached by keyword mode.
@@ -246,6 +244,22 @@ The quality gap vs the semantic pipeline is the expected BM25-only trade-off; la
   1. `قرض سيارات` — the top-1 result IS the loans category page (`LoanCatID`), but the strict checker requires the substring "Loans", which that URL does not contain. Substantively correct; eval-case artifact.
   2. `Where is the nearest NBE branch?` — returns Branch Appointment pages; the thin "ATM and branches" page (1 matching term) loses to richer branch pages under bag-of-words scoring.
   3. Arabic synonym expansion was kept but partially dilutes brand queries (BM25 has no cross-encoder to re-rank — that is the semantic pipeline's job).
+
+---
+
+## Follow-up enhancement (2026-10-08, commit `b2345de`): BM25 title autocomplete
+
+**Problem:** traditional-mode autocomplete answered from the static query catalog only (~30 curated entries), so most realistic typed prefixes returned nothing and the dropdown never rendered — users read this as "no autocomplete in traditional search". (The frontend and API wiring were already correct; item 3.3 was functionally done but starved of suggestions.)
+
+**Fix:** added `_bm25_title_matches()` to `services/search_service/autocomplete.py`, wired into `build_autocomplete` for both modes (it is the main suggestion source when `catalog_only=True`):
+
+- **Source:** the standalone BM25 pickle (`get_bm25_index()`) — no embedder, no vector-store client, preserving the keystroke-latency guarantee of the `catalog_only` path.
+- **Matching:** exact BM25 ranking of the query tokens first; when that yields nothing (partial/inflected prefixes whose tokens differ from title tokens), a normalized-substring fallback over unique titles (`normalize_arabic` for AR), with prefix hits scored above mid-title hits and same-language titles above other-language ones.
+- **Output:** `SearchSuggestion {query=label, label=title, url, reason="bm25_title_match", score}` — BM25 doc scores are normalized into a 0–0.85 band so the static catalog stays authoritative at the top. Suggestion chips feed the raw page title back into the search box (no "What is …?" wrapper) so the keyword engine can rank BM25 tokens directly.
+- **Tests:** +2 in `tests/unit/test_autocomplete.py` (BM25 title source with a patched in-memory index; empty-index safety). Suite now **195/195 green**.
+- **Verified live:** `q=loan` → topic match + real loan pages; `q=قرض` → `القروض الشخصية` + `البنك الأهلى المصرى - القروض` (LoanCatID URL); short-Arabic regression `q=شه` unchanged.
+
+**Frontend note:** no rebuild required — the bundle already sent `mode=traditional` and rendered the dropdown; the fix is backend-only. If the old UI still appears, hard-refresh (`Ctrl+Shift+R`) to bust the browser cache.
 
 ---
 
