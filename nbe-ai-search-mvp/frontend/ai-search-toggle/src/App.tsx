@@ -292,7 +292,7 @@ const NBE_WEBSITE = "https://www.nbe.com.eg";
 /* ------------------------------------------------------------------ */
 
 export default function App() {
-  const [mode, setMode] = useState<SearchMode>("ai");
+  const [mode, setMode] = useState<SearchMode>("hybrid");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -683,22 +683,22 @@ export default function App() {
                 <button
                   type="button"
                   role="tab"
-                  aria-selected={mode === "ai"}
-                  className={mode === "ai" ? "active" : ""}
-                  onClick={() => setMode("ai")}
-                >
-                  <span className="mode-icon" aria-hidden="true"><IconSparkle size={16} /></span>
-                  <span>{ar ? "البحث الذكي" : "AI Search"}</span>
-                </button>
-                <button
-                  type="button"
-                  role="tab"
                   aria-selected={mode === "hybrid"}
                   className={mode === "hybrid" ? "active" : ""}
                   onClick={() => setMode("hybrid")}
                 >
                   <span className="mode-icon" aria-hidden="true"><IconLayers size={16} /></span>
                   <span>{ar ? "البحث المختلط" : "Hybrid Search"}</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === "ai"}
+                  className={mode === "ai" ? "active" : ""}
+                  onClick={() => setMode("ai")}
+                >
+                  <span className="mode-icon" aria-hidden="true"><IconSparkle size={16} /></span>
+                  <span>{ar ? "البحث الذكي" : "AI Search"}</span>
                 </button>
                 <button
                   type="button"
