@@ -206,6 +206,67 @@ def test_group_pages_without_phrases_is_backward_compatible():
     assert len(pages) == 1
 
 
+# ---------------------------------------------------------------------------
+# Dominant title similarity
+# ---------------------------------------------------------------------------
+
+
+def test_group_pages_title_similarity_beats_body_frequency():
+    # User-reported case: "Platinum" must rank the Platinum page first even
+    # though the Exclusive-Products body mentions "platinum" more often.
+    exclusive = _chunk(
+        "excl",
+        "u-excl",
+        title="exclusive products",
+        text="platinum " * 40,
+    )
+    platinum = _chunk(
+        "plat",
+        "u-plat",
+        title="national bank of egypt - platinum",
+        text="platinum card benefits",
+    )
+    pages = group_pages(
+        [(exclusive, 10.0), (platinum, 5.0)],
+        terms=["platinum"],
+        language="en",
+    )
+    assert pages[0][0].chunk_id == "plat"
+
+
+def test_group_pages_full_title_match_wins_on_tie():
+    a = _chunk("a", "u-a", title="savings certificates", text="rate stuff")
+    b = _chunk("b", "u-b", title="some other page", text="savings certificates rate stuff savings")
+    pages = group_pages(
+        [(a, 3.0), (b, 3.0)],
+        terms=["savings", "certificates"],
+        language="en",
+    )
+    assert pages[0][0].chunk_id == "a"
+
+
+def test_title_similarity_ignores_corporate_prefix_tokens():
+    # "National Bank of Egypt - Platinum" must be judged by "platinum":
+    # the corporate words would otherwise dilute coverage to 1/4 everywhere.
+    from services.search_service.traditional import _title_match_tokens
+
+    assert _title_match_tokens(
+        ["national", "bank", "egypt", "platinum"], "en"
+    ) == ["platinum"]
+    # A query that is ONLY corporate words keeps them (no dilution, no crash).
+    assert _title_match_tokens(["bank"], "en") == ["bank"]
+    assert _title_match_tokens([], "en") == []
+
+
+def test_service_platinum_page_ranks_first_on_real_index():
+    svc = TraditionalSearchService()
+    outcome = svc.search("National Bank of Egypt - Platinum", "en", limit=5)
+    assert outcome.results, "expected results"
+    assert outcome.results[0].title == "National Bank of Egypt - Platinum"
+    outcome_short = svc.search("Platinum", "en", limit=5)
+    assert outcome_short.results[0].title == "National Bank of Egypt - Platinum"
+
+
 def test_normalize_scores_range():
     pairs = [(_chunk("a", "u1"), 3.2), (_chunk("b", "u2"), 9.7)]
     normalized = normalize_scores(pairs)

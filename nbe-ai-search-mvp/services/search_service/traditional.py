@@ -76,8 +76,51 @@ _AR_INFIX_PLURALS = {
 }
 
 _TITLE_BOOST_WEIGHT = 0.15
+# Title similarity is the DOMINANT signal: a page whose title contains the
+# query's identifying tokens must beat a body-heavy page that merely mentions
+# them more often (BM25 is frequency-driven; titles are not). A perfect
+# title match multiplies the raw BM25 score by (1 + _TITLE_SIMILARITY_WEIGHT).
+_TITLE_SIMILARITY_WEIGHT = 4.0
 _TITLE_PHRASE_BONUS = 0.60
 _BODY_PHRASE_BONUS = 0.25
+
+# Corporate prefix the scraper prepends to page titles ("National Bank of
+# Egypt - Platinum"). Tokens from this prefix name the company, not the page:
+# they are excluded from title-similarity matching so that a query like
+# "National Bank of Egypt - Platinum" is judged by "platinum" alone instead
+# of being diluted to 1/4 coverage on every corporate page.
+_TITLE_PREFIXES = (
+    "National Bank of Egypt - ",
+    "البنك الأهلى المصرى - ",
+    "البنك الأهلي المصرى - ",
+)
+_CORPORATE_PREFIX_TOKENS: dict[str, frozenset[str]] = {
+    "en": frozenset(
+        token.lower()
+        for prefix in _TITLE_PREFIXES
+        for token in prefix.split()
+        if token != "-"
+    ),
+    "ar": frozenset(
+        normalize_arabic(token)
+        for prefix in _TITLE_PREFIXES
+        for token in prefix.split()
+        if token != "-"
+    ),
+}
+
+
+def _title_match_tokens(terms: list[str], language: str) -> list[str]:
+    """Query tokens that identify the *page*, with corporate-prefix words out.
+
+    Only filtered when the query also has identifying tokens left: a bare
+    "national bank of egypt" query keeps its tokens and behaves normally.
+    """
+    prefix_tokens = _CORPORATE_PREFIX_TOKENS.get(language, frozenset())
+    if not prefix_tokens:
+        return list(terms)
+    kept = [term for term in terms if term not in prefix_tokens]
+    return kept if kept else list(terms)
 _SNIPPET_TERM_WINDOW = 60
 
 
@@ -252,6 +295,21 @@ def _normalized_text(text: str, language: str) -> str:
     return normalize_arabic(cleaned) if language == "ar" else cleaned.lower()
 
 
+def _title_similarity(title: str, terms: list[str], language: str) -> float:
+    """Fraction of identifying query tokens found in the normalized title.
+
+    Deliberately ignores frequency — one token appearing once in a title is
+    worth as much as it appearing ten times: titles are labels, not prose.
+    """
+    if not terms:
+        return 0.0
+    title_haystack = _normalized_text(title, language)
+    if not title_haystack:
+        return 0.0
+    hits = sum(1 for term in terms if term in title_haystack)
+    return hits / len(terms)
+
+
 def _term_coverage(text: str, terms: list[str], language: str) -> float:
     if not terms:
         return 0.0
@@ -301,6 +359,8 @@ def _title_boosted_score(
     """
     coverage = _term_coverage(chunk.title, terms, language)
     boosted = score * (1.0 + _TITLE_BOOST_WEIGHT * coverage)
+    similarity = _title_similarity(chunk.title, _title_match_tokens(terms, language), language)
+    boosted *= 1.0 + _TITLE_SIMILARITY_WEIGHT * similarity
     if phrases:
         title_haystack = _normalized_text(chunk.title, language)
         body_haystack = _normalized_text(chunk.text, language)

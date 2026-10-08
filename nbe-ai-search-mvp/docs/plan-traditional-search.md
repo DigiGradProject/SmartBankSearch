@@ -263,6 +263,20 @@ The quality gap vs the semantic pipeline is the expected BM25-only trade-off; la
 
 ---
 
+## Follow-up enhancement (2026-10-08, branch `feat/title-similarity-boost`): dominant title similarity in page ranking
+
+**Problem (user-reported):** the "Exclusive Products" page mentions "platinum" more often than the "National Bank of Egypt - Platinum" page does, so bag-of-words BM25 ranked it #1 even for the queries "Platinum" and "National Bank of Egypt - Platinum". Title labels carry no frequency information, yet users treat title identity as the strongest relevance signal.
+
+**Fix (backend-only, `services/search_service/traditional.py`):**
+
+- New `_title_similarity()` — fraction of identifying query tokens present in the normalized page title (frequency-agnostic: one hit in a title ≈ many hits). Applied in `_title_boosted_score` with weight `_TITLE_SIMILARITY_WEIGHT = 4.0`, i.e. a full title match multiplies the BM25 score by 5×; a body-heavy page with no title terms gains nothing.
+- Corporate-prefix tokens are excluded from title matching when identifying tokens remain (`_title_match_tokens`, tokens of `_TITLE_PREFIXES`: "national", "bank", "egypt" / Arabic equivalents). This keeps "National Bank of Egypt - Platinum" from being diluted to 1/4 coverage on every corporate page, while a bare "bank" query keeps its tokens.
+- **Verified:** queries `National Bank of Egypt - Platinum`, `Platinum`, `platinum` → "National Bank of Egypt - Platinum" is #1 (was #2 behind "Exclusive Products"); all spot checks free of regressions.
+- **Tests:** +5 in `tests/unit/test_traditional_search.py` incl. body-frequency vs title-match case and real-index assertions. Suite **203/203 green**.
+- **Golden set (`scripts/eval_retrieval_modes.py --mode KEYWORD`, 220 cases):** with the change, Recall@5 54.1% / MRR 0.393 / nDCG@5 0.428 / Top1 31.4% — substantially higher than the pre-change run on identical inputs (48.2% / 0.339 / 0.374 / 26.8%). No regressions observed.
+
+---
+
 ## Suggested execution order
 
 Phases 0 → 1 → 2 → 3 strictly sequential (each is reviewable). Phase 4 can run parallel to Phase 3. Phase 5 closes.
