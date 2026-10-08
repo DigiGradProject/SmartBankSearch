@@ -518,6 +518,14 @@ input:focus-visible {
   animation: rise 180ms ease both;
 }
 
+/* Portal-rendered variant: mounted on document.body with position:fixed
+   (inline styles provide left/top/width) so no ancestor overflow or stacking
+   context can clip or cover the suggestion list. */
+.autocomplete-list--floating {
+  inset: auto;
+  z-index: 9999;
+}
+
 .autocomplete-list button {
   display: flex;
   align-items: center;
@@ -1463,6 +1471,118 @@ input:focus-visible {
   .no-answer {
     padding: 18px;
   }
+}
+
+/* ================================================================== */
+/*  Traditional (keyword) search results                               */
+/* ================================================================== */
+
+.traditional-results {
+  margin-top: 30px;
+  padding-top: 24px;
+  border-top: 1px solid #e8eee9;
+  animation: rise 300ms ease both;
+}
+
+.trad-list {
+  display: grid;
+  gap: 10px;
+}
+
+.trad-card {
+  display: grid;
+  gap: 7px;
+  padding: 14px 16px;
+  color: var(--ink);
+  text-decoration: none;
+  background: var(--white);
+  border: 1px solid var(--border-soft);
+  border-radius: 13px;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.trad-card:hover {
+  border-color: rgba(0, 100, 62, 0.35);
+  box-shadow: 0 12px 28px -18px rgba(0, 100, 62, 0.45);
+  transform: translateY(-1px);
+}
+
+.trad-title {
+  color: var(--green);
+  font-size: 0.98rem;
+  font-weight: 800;
+  overflow-wrap: break-word;
+}
+
+.trad-snippet {
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.7;
+  overflow-wrap: break-word;
+}
+
+.trad-meta {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 2px;
+}
+
+.trad-chip {
+  padding: 3px 9px;
+  color: var(--green);
+  background: var(--green-soft);
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.trad-lang {
+  color: var(--faint);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.trad-score {
+  color: var(--gold-ink);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.trad-arrow {
+  display: inline-flex;
+  color: var(--faint);
+  margin-inline-start: auto;
+}
+
+.trad-card:hover .trad-arrow {
+  color: var(--green);
+}
+
+mark.trad-hl {
+  padding: 0 1px;
+  color: var(--green-dark);
+  background: var(--gold-soft);
+  border-radius: 3px;
+}
+
+.load-more {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 11px;
+  color: var(--green);
+  background: var(--white);
+  border: 1px dashed rgba(0, 100, 62, 0.35);
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 800;
+  transition: background 160ms ease;
+}
+
+.load-more:hover {
+  background: var(--green-soft);
 }
 
 /* Respect reduced motion preferences */

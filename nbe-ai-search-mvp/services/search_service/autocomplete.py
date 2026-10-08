@@ -5,8 +5,9 @@ from __future__ import annotations
 import re
 
 from ingestion.embedding.vector_store import RetrievedChunk, VectorStore
+from ingestion.lexical.bm25_index import get_bm25_index, tokenize_text
+from services.rag.language import detect_language, prepare_query
 from services.search_service.keyword_rank import extract_query_terms, keyword_overlap_score
-from services.search_service.language import detect_language, prepare_query
 from services.search_service.query_catalog import TOPIC_QUERIES_AR, TOPIC_QUERIES_EN, catalog_for_language
 from services.search_service.query_expand import expand_query, expand_query_intent
 from shared.arabic_normalize import normalize_arabic
@@ -40,6 +41,76 @@ def _catalog_score(query_norm: str, entry_query: str, entry_keywords: tuple[str,
         if overlap >= 0.34:
             return 0.55 + overlap * 0.3
     return 0.0
+
+
+def _bm25_title_matches(query: str, language: str, limit: int) -> list[SearchSuggestion]:
+    """Suggest real page titles from the standalone BM25 index (no embedder).
+
+    Traditional mode fetches autocomplete on every keystroke (catalog_only=True)
+    so it must never touch the vector store; this source keeps suggestions
+    grounded in the actual indexed corpus instead of only the small static
+    query catalog.
+    """
+    index = get_bm25_index()
+    if index.size == 0:
+        return []
+
+    query_tokens = tokenize_text(query, language)
+    if not query_tokens:
+        return []
+
+    # Exact BM25 ranking, then fall back to normalized-substring title match
+    # for partial/inflected prefixes that tokenize differently.
+    scored: list[tuple[str, str, str | None, float]] = []
+    for chunk, bm25_score in index.query(query, language, top_k=limit * 4):
+        title = chunk.title.strip()
+        if title:
+            # Normalize raw BM25 doc scores into a stable 0..1 band below the
+            # static-catalog scores (catalog stays authoritative up top).
+            scored.append((title, chunk.language, chunk.url, min(bm25_score, 12.0) / 12.0 * 0.85))
+
+    if not scored:
+        query_norm = _normalize_for_match(query, language)
+        seen_substring: set[str] = set()
+        for chunk in index._chunks:
+            title_norm = _normalize_for_match(chunk.title, chunk.language or language)
+            if query_norm and query_norm in title_norm:
+                title = chunk.title.strip()
+                if title and title not in seen_substring:
+                    seen_substring.add(title)
+                    # Prefix hits rank above mid-title hits; other-language
+                    # titles rank below same-language ones so the dropdown
+                    # stays clean unless the corpus is nearly empty.
+                    same_language = language == "auto" or chunk.language == language
+                    starts = title_norm.startswith(query_norm)
+                    base = 0.35 if starts else 0.25
+                    scored.append((title, chunk.language, chunk.url, base if same_language else base - 0.2))
+
+    suggestions: list[SearchSuggestion] = []
+    seen: set[str] = set()
+    scored.sort(key=lambda item: item[3], reverse=True)
+    for title, title_language, url, score in scored:
+        if title.lower() in seen:
+            continue
+        seen.add(title.lower())
+        suggestions.append(
+            SearchSuggestion(
+                query=_query_from_title(title, title_language or language),
+                label=title,
+                url=url or None,
+                reason="bm25_title_match",
+                score=round(score, 3),
+            )
+        )
+        if len(suggestions) >= limit:
+            break
+    return suggestions
+
+
+def _query_from_title(title: str, language: str) -> str:
+    # Suggestion chips feed back into the search box; keep them as raw terms
+    # (no "What is ...?" wrapper) so the keyword engine ranks BM25 tokens.
+    return title
 
 
 def _topic_matches(query: str, language: str) -> list[SearchSuggestion]:
@@ -135,8 +206,17 @@ def build_autocomplete(
     language: str = "auto",
     limit: int = 8,
     vector_store: VectorStore | None = None,
+    *,
+    catalog_only: bool = False,
 ) -> list[SearchSuggestion]:
-    store = vector_store or VectorStore()
+    """Suggest queries while typing.
+
+    catalog_only=True skips the vector-store semantic pass — used by the
+    traditional-search UX to keep keystroke latency low. The store must be
+    created lazily: VectorStore() eagerly builds a Chroma client and loads
+    the BGE-M3 embedder, which catalog-only keystrokes must never pay for.
+    """
+    store = None if catalog_only else (vector_store or VectorStore())
     resolved_language = detect_language(query, language)
     trimmed = query.strip()
 
@@ -165,10 +245,16 @@ def build_autocomplete(
         )
         seen.add(expanded.lower())
 
+    semantic_items = (
+        []
+        if catalog_only
+        else _semantic_matches(trimmed, resolved_language, store, limit)  # type: ignore[arg-type]
+    )
     for item in (
         _topic_matches(trimmed, resolved_language)
         + _catalog_matches(trimmed, resolved_language, limit)
-        + _semantic_matches(trimmed, resolved_language, store, limit)
+        + _bm25_title_matches(trimmed, resolved_language, limit)
+        + semantic_items
     ):
         key = item.query.lower().strip()
         if not key or key in seen:

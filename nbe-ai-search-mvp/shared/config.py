@@ -18,8 +18,11 @@ class Settings(BaseSettings):
     )
     scrape_root: Path = project_root.parent / "nbe_complete_scrape"
     chroma_path: Path = project_root / "data" / "chroma"
-    # Bump when corpus schema/content changes materially.
-    chroma_collection: str = "nbe_chunks_bge_m3_v7"
+    # Must match BOTH the deployed Chroma collection and the BM25 index
+    # (data/bm25/corpus.pkl stores the collection name at build time and
+    # refuses to load on mismatch — a drift here silently disables BM25).
+    # Bump only together with a full re-ingest + `scripts/rebuild_bm25.py`.
+    chroma_collection: str = "nbe_chunks_bge_m3_v4"
     intent_filter_confidence: float = 0.75
     intent_filter_enabled: bool = True
     # Staged metadata filter (analysis.md Phase A/B)
@@ -39,6 +42,14 @@ class Settings(BaseSettings):
     bm25_top_k: int = 50
     dense_top_k: int = 50
     rrf_k: int = 60
+
+    # Traditional (keyword) search — BM25-only, no LLM/reranker/business rules.
+    keyword_search_enabled: bool = True
+    keyword_results_limit: int = 10          # default page size
+    keyword_results_max_limit: int = 30      # hard cap per request
+    keyword_fill_min_results: int = 5        # other-language fill-in threshold
+    keyword_snippet_chars: int = 240
+    keyword_max_query_tokens: int = 32
 
     embedding_model: str = "BAAI/bge-m3"
     reranker_model: str = "BAAI/bge-reranker-v2-m3"

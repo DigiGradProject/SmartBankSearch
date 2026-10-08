@@ -17,10 +17,17 @@ class RetrievalMode(str, Enum):
         Intent → business-rule soft boosts → hybrid → reranker → confidence
         gate → LLM. Business rules influence ranking only; they never inject
         or force a document into the result set.
+
+    KEYWORD
+        Traditional keyword search: BM25-only, no LLM, no reranker, no
+        business rules. Used by the traditional-search experience
+        (services/search_service/traditional.py); when it reaches
+        SearchService.retrieve it behaves like PURE_SEMANTIC (no gate).
     """
 
     PURE_SEMANTIC = "PURE_SEMANTIC"
     ENTERPRISE = "ENTERPRISE"
+    KEYWORD = "KEYWORD"
 
 
 def parse_retrieval_mode(value: str | RetrievalMode | None) -> RetrievalMode:
@@ -33,7 +40,7 @@ def parse_retrieval_mode(value: str | RetrievalMode | None) -> RetrievalMode:
         return RetrievalMode(normalized)
     except ValueError as exc:
         raise ValueError(
-            f"Unknown retrieval_mode={value!r}; expected PURE_SEMANTIC or ENTERPRISE"
+            f"Unknown retrieval_mode={value!r}; expected PURE_SEMANTIC, ENTERPRISE or KEYWORD"
         ) from exc
 
 
@@ -44,3 +51,8 @@ def business_rules_active(
 ) -> bool:
     """Enterprise safety layer applies only in ENTERPRISE mode when enabled."""
     return mode == RetrievalMode.ENTERPRISE and business_rules_enabled
+
+
+def gate_active(mode: RetrievalMode) -> bool:
+    """Confidence/decision gate applies only in ENTERPRISE mode."""
+    return mode == RetrievalMode.ENTERPRISE

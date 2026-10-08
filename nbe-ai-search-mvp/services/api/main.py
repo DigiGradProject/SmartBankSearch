@@ -1,16 +1,22 @@
 from contextlib import asynccontextmanager
 
+import time
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import Counter, Histogram, generate_latest
 from starlette.responses import PlainTextResponse, Response
 
 from ingestion.embedding.vector_store import VectorStore
+from ingestion.lexical.bm25_index import get_bm25_index
 from ingestion.pipeline import RUNS, run_ingestion
 from services.api.orchestrator import Orchestrator
 from services.feedback.service import FeedbackService
-from services.rag.metrics import FEEDBACK_TOTAL
+from services.rag.analytics import AnalyticsEvent, write_analytics_event
+from services.rag.audit import write_audit_event
+from services.rag.metrics import FEEDBACK_TOTAL, TRADITIONAL_LATENCY
 from services.search_service.autocomplete import build_autocomplete
+from services.search_service.traditional import TraditionalSearchService
 from shared.config import settings
 from shared.logging import configure_logging, get_logger
 from shared.schemas import (
@@ -28,13 +34,51 @@ from shared.schemas import (
 configure_logging()
 logger = get_logger(__name__)
 
-SEARCH_REQUESTS = Counter("nbe_search_requests_total", "Total search requests", ["answered"])
+SEARCH_REQUESTS = Counter("nbe_search_requests_total", "Total search requests", ["answered", "mode"])
 SEARCH_LATENCY = Histogram("nbe_search_latency_seconds", "Search request latency")
 ABSTENTION_COUNT = Counter("nbe_search_abstentions_total", "Total abstentions", ["reason"])
 
 orchestrator = Orchestrator()
 vector_store = VectorStore()
 feedback_service = FeedbackService()
+traditional_search = TraditionalSearchService()
+
+
+def _log_traditional_event(request: SearchRequest, outcome, total_ms: float) -> None:  # noqa: ANN001 — internal dataclass
+    """Lightweight analytics + audit trail for traditional (keyword) searches."""
+    import hashlib
+
+    write_analytics_event(
+        AnalyticsEvent(
+            query=request.query,
+            intent="traditional_search",
+            rewritten_query="",
+            total_ms=round(total_ms, 1),
+            top_documents=[
+                {"title": r.title, "url": r.url, "score": r.score, "category": r.category}
+                for r in outcome.results[:5]
+            ],
+            confidence=1.0 if outcome.results else 0.0,
+            confidence_reason="bm25_keyword_ranking",
+            decision="KEYWORD_RESULTS" if outcome.results else "NO_RESULTS",
+            language=outcome.language,
+            answered=bool(outcome.results),
+        )
+    )
+    if settings.audit_log_enabled:
+        write_audit_event(
+            {
+                "query_hash": hashlib.sha256(request.query.strip().encode("utf-8")).hexdigest()[:16],
+                "language": outcome.language,
+                "intent": "traditional_search",
+                "mode": "KEYWORD",
+                "source_urls": [r.url for r in outcome.results[:10]],
+                "result_count": outcome.total,
+                "answered": bool(outcome.results),
+                "abstention_reason": None if outcome.results else "no_keyword_matches",
+                "models": {"embedding": "none", "reranker": "none", "llm": "none"},
+            }
+        )
 
 
 @asynccontextmanager
@@ -57,10 +101,17 @@ app.add_middleware(
 @app.get("/v1/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     llm_status = await orchestrator.llm_service.health()
+    if not settings.bm25_enabled:
+        # Deliberately disabled — do not even load the pickle.
+        bm25_status = "degraded"
+    else:
+        bm25_index = get_bm25_index()
+        bm25_status = "ok" if bm25_index.size > 0 else "down"
     components = HealthComponents(
         vector_db=vector_store.health(),  # type: ignore[arg-type]
         llm=llm_status,  # type: ignore[arg-type]
         api="ok",
+        bm25=bm25_status,  # type: ignore[arg-type]
     )
     overall = "ok" if all(value != "down" for value in components.model_dump().values()) else "degraded"
     return HealthResponse(status=overall, components=components)  # type: ignore[arg-type]
@@ -68,9 +119,56 @@ async def health() -> HealthResponse:
 
 @app.post("/v1/search", response_model=SearchResponse)
 async def search(request: SearchRequest) -> SearchResponse:
+    if request.mode == "traditional":
+        if not settings.keyword_search_enabled:
+            raise HTTPException(status_code=404, detail="Traditional search is disabled")
+        t0 = time.perf_counter()
+        with TRADITIONAL_LATENCY.time():
+            outcome = traditional_search.search(
+                request.query, request.language, limit=request.limit, offset=request.offset
+            )
+        total_ms = (time.perf_counter() - t0) * 1000.0
+        suggestions = build_autocomplete(
+            request.query, request.language, limit=5, catalog_only=True
+        )
+        guidance = (
+            None
+            if outcome.results
+            else (
+                "لم نجد نتائج مطابقة. جرّب كلمات مفتاحية أقل أو مختلفة."
+                if outcome.language == "ar"
+                else "No matching pages found. Try fewer or different keywords."
+            )
+        )
+        abstention = None
+        if not outcome.results:
+            abstention = (
+                "keyword_index_unavailable"
+                if not outcome.bm25_available
+                else "no_keyword_matches"
+            )
+        response = SearchResponse(
+            answer=None,
+            confidence=1.0 if outcome.results else 0.0,
+            citations=[],
+            answered=bool(outcome.results),
+            language=outcome.language,  # type: ignore[arg-type]
+            abstention_reason=abstention,
+            suggestions=suggestions,
+            guidance=guidance,
+            mode="traditional",
+            results=outcome.results,
+            total_results=outcome.total,
+        )
+        SEARCH_REQUESTS.labels(answered=str(response.answered).lower(), mode="traditional").inc()
+        if abstention:
+            ABSTENTION_COUNT.labels(reason=abstention).inc()
+        _log_traditional_event(request, outcome, total_ms)
+        return response
+
     with SEARCH_LATENCY.time():
         response = await orchestrator.search(request.query, request.language, debug=request.debug)
-    SEARCH_REQUESTS.labels(answered=str(response.answered).lower()).inc()
+    SEARCH_REQUESTS.labels(answered=str(response.answered).lower(), mode="ai").inc()
     if not response.answered and response.abstention_reason:
         ABSTENTION_COUNT.labels(reason=response.abstention_reason).inc()
     return response
@@ -84,11 +182,19 @@ async def feedback(request: FeedbackRequest) -> FeedbackResponse:
 
 
 @app.get("/v1/autocomplete", response_model=AutocompleteResponse)
-async def autocomplete(q: str = "", language: str = "auto", limit: int = 8) -> AutocompleteResponse:
+async def autocomplete(
+    q: str = "",
+    language: str = "auto",
+    limit: int = 8,
+    mode: str = "ai",
+) -> AutocompleteResponse:
     from services.rag.language import detect_language
 
     resolved_language = detect_language(q, language)  # type: ignore[arg-type]
-    suggestions = build_autocomplete(q, language, limit=limit)
+    catalog_only = mode == "traditional"
+    suggestions = build_autocomplete(
+        q, language, limit=limit, catalog_only=catalog_only
+    )
     return AutocompleteResponse(query=q, language=resolved_language, suggestions=suggestions)  # type: ignore[arg-type]
 
 

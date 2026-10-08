@@ -13,7 +13,7 @@ from services.search_service.intent_classifier import QueryIntent, should_apply_
 from services.search_service.keyword_rank import extract_query_terms, keyword_overlap_score, rerank_chunks
 from services.search_service.reranker import get_reranker
 from shared.config import settings
-from shared.retrieval_mode import RetrievalMode, business_rules_active, parse_retrieval_mode
+from shared.retrieval_mode import RetrievalMode, business_rules_active, gate_active, parse_retrieval_mode
 from shared.url_canonical import canonical_url_key
 from shared.document_quality import (
     is_junk_document,
@@ -310,8 +310,8 @@ class SearchService:
         confidence = round(min(1.0, breakdown.final * 0.75 + legacy * 0.25), 3)
         confidence_reason = breakdown.reason
 
-        if mode == RetrievalMode.PURE_SEMANTIC:
-            # Eval path: return ranked hybrid results without enterprise gate.
+        if not gate_active(mode):
+            # PURE_SEMANTIC / KEYWORD: return ranked hybrid results without enterprise gate.
             decision_label = "ANSWER" if chunks else "NO_ANSWER"
             should_answer = bool(chunks)
             abstention_reason = None if should_answer else "no_relevant_chunks"
