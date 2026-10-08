@@ -365,6 +365,21 @@ input:focus-visible {
   border-radius: 16px;
 }
 
+/* Three-mode layout: AI | Hybrid | Traditional. */
+.mode-toggle.mode-toggle--three {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+@media (max-width: 640px) {
+  .mode-toggle.mode-toggle--three {
+    grid-template-columns: 1fr;
+  }
+
+  .mode-toggle.mode-toggle--three button {
+    min-height: 42px;
+  }
+}
+
 .mode-toggle button {
   position: relative;
   display: inline-flex;

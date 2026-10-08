@@ -16,6 +16,7 @@ from services.rag.analytics import AnalyticsEvent, write_analytics_event
 from services.rag.audit import write_audit_event
 from services.rag.metrics import FEEDBACK_TOTAL, TRADITIONAL_LATENCY
 from services.search_service.autocomplete import build_autocomplete
+from services.search_service.hybrid_pages import HybridPageSearchService
 from services.search_service.traditional import TraditionalSearchService
 from shared.config import settings
 from shared.logging import configure_logging, get_logger
@@ -36,12 +37,16 @@ logger = get_logger(__name__)
 
 SEARCH_REQUESTS = Counter("nbe_search_requests_total", "Total search requests", ["answered", "mode"])
 SEARCH_LATENCY = Histogram("nbe_search_latency_seconds", "Search request latency")
+HYBRID_LATENCY = Histogram("nbe_hybrid_search_latency_seconds", "Hybrid search latency")
 ABSTENTION_COUNT = Counter("nbe_search_abstentions_total", "Total abstentions", ["reason"])
 
 orchestrator = Orchestrator()
 vector_store = VectorStore()
 feedback_service = FeedbackService()
 traditional_search = TraditionalSearchService()
+# Retrieval-only hybrid search (mode="hybrid"): shares the API's vector store
+# and (via the singleton) the BM25 pickle with traditional search.
+hybrid_page_search = HybridPageSearchService(vector_store=vector_store)
 
 
 def _log_traditional_event(request: SearchRequest, outcome, total_ms: float) -> None:  # noqa: ANN001 — internal dataclass
@@ -77,6 +82,47 @@ def _log_traditional_event(request: SearchRequest, outcome, total_ms: float) -> 
                 "answered": bool(outcome.results),
                 "abstention_reason": None if outcome.results else "no_keyword_matches",
                 "models": {"embedding": "none", "reranker": "none", "llm": "none"},
+            }
+        )
+
+
+def _log_hybrid_event(request: SearchRequest, outcome, total_ms: float) -> None:  # noqa: ANN001 — HybridPagesOutcome
+    """Analytics + audit trail for hybrid (dense+BM25 fusion) searches."""
+    import hashlib
+
+    write_analytics_event(
+        AnalyticsEvent(
+            query=request.query,
+            intent="hybrid_search",
+            rewritten_query="",
+            total_ms=round(total_ms, 1),
+            top_documents=[
+                {"title": r.title, "url": r.url, "score": r.score, "category": r.category}
+                for r in outcome.results[:5]
+            ],
+            confidence=1.0 if outcome.results else 0.0,
+            confidence_reason="hybrid_rrf_rerank_ranking",
+            decision="HYBRID_RESULTS" if outcome.results else "NO_RESULTS",
+            language=outcome.language,
+            answered=bool(outcome.results),
+        )
+    )
+    if settings.audit_log_enabled:
+        write_audit_event(
+            {
+                "query_hash": hashlib.sha256(request.query.strip().encode("utf-8")).hexdigest()[:16],
+                "language": outcome.language,
+                "intent": "hybrid_search",
+                "mode": "HYBRID",
+                "source_urls": [r.url for r in outcome.results[:10]],
+                "result_count": outcome.total,
+                "answered": bool(outcome.results),
+                "abstention_reason": None if outcome.results else "no_hybrid_matches",
+                "models": {
+                    "embedding": settings.embedding_model,
+                    "reranker": settings.reranker_model if outcome.reranked else "fallback",
+                    "llm": "none",
+                },
             }
         )
 
@@ -164,6 +210,51 @@ async def search(request: SearchRequest) -> SearchResponse:
         if abstention:
             ABSTENTION_COUNT.labels(reason=abstention).inc()
         _log_traditional_event(request, outcome, total_ms)
+        return response
+
+    if request.mode == "hybrid":
+        t0 = time.perf_counter()
+        with HYBRID_LATENCY.time():
+            outcome = hybrid_page_search.search(
+                request.query, request.language, limit=request.limit, offset=request.offset
+            )
+        total_ms = (time.perf_counter() - t0) * 1000.0
+        suggestions = build_autocomplete(
+            request.query, request.language, limit=5, catalog_only=False
+        )
+        guidance = (
+            None
+            if outcome.results
+            else (
+                "لم نجد نتائج مطابقة. جرّب كلمات مفتاحية أقل أو مختلفة."
+                if outcome.language == "ar"
+                else "No matching pages found. Try fewer or different keywords."
+            )
+        )
+        abstention = None
+        if not outcome.results:
+            abstention = (
+                "hybrid_index_unavailable"
+                if not outcome.bm25_available and not outcome.dense_candidates
+                else "no_hybrid_matches"
+            )
+        response = SearchResponse(
+            answer=None,
+            confidence=1.0 if outcome.results else 0.0,
+            citations=[],
+            answered=bool(outcome.results),
+            language=outcome.language,  # type: ignore[arg-type]
+            abstention_reason=abstention,
+            suggestions=suggestions,
+            guidance=guidance,
+            mode="hybrid",
+            results=outcome.results,
+            total_results=outcome.total,
+        )
+        SEARCH_REQUESTS.labels(answered=str(response.answered).lower(), mode="hybrid").inc()
+        if abstention:
+            ABSTENTION_COUNT.labels(reason=abstention).inc()
+        _log_hybrid_event(request, outcome, total_ms)
         return response
 
     with SEARCH_LATENCY.time():
