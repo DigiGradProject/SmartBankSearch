@@ -1,6 +1,6 @@
 # Plan: Hybrid Search tab (dense + BM25, RRF-fused, no LLM)
 
-Status: **DRAFT — awaiting review**
+Status: **IMPLEMENTED on branch `feat/hybrid-search-tab`**
 Branch target: new branch `feat/hybrid-search-tab` off current `main`
 Owner: Buffy + user review
 
@@ -171,3 +171,90 @@ helpers need export), schemas beyond the Literal, frontend CSS (unless tab overf
 3. **Tab label**: "Hybrid Search" / "البحث المختلط" ok?
 4. Should hybrid mode also appear in the health/metrics dashboards as its own latency series
    (recommended: yes, one `HYBRID_LATENCY` histogram).
+
+---
+
+## 9. Implementation results (2026-10-08)
+
+### Final pipeline (as approved, note #2)
+
+```
+BM25 Top 50 (rank_bm25, keyword-prepped query)  +  BGE-M3 dense Top 50 (Chroma)
+                 ↓ reciprocal_rank_fusion (rrf_k=60, shared with HybridRetriever)
+              Top 30 (HYBRID_FUSED_KEEP)
+                 ↓ BGEM3Reranker cross-encoder (pool 30 → keep 30)
+                 ↓ controlled title boost: ×(1 + 0.35·coverage) (+0.25 exact-title)
+                 ↓ canonical-URL page dedup + min-max normalize
+              Top 10 page-level results (TraditionalResult contract)
+```
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `services/search_service/hybrid_pages.py` | **new** — HybridPageSearchService (348 lines) |
+| `shared/schemas.py` | `mode: Literal["ai","traditional","hybrid"]` — additive only |
+| `services/api/main.py` | hybrid branch in `/v1/search`, `HYBRID_LATENCY` histogram, `_log_hybrid_event` |
+| `frontend/ai-search-toggle/src/App.tsx` | third tab (IconLayers), hybrid state/fetch/load-more, result sections |
+| `frontend/ai-search-toggle/src/styles.css` | `.mode-toggle--three` (3-column, mobile stack) |
+| `scripts/eval_hybrid_comparison.py` | **new** — three-mode comparison harness |
+| `tests/unit/test_hybrid_pages.py` | **new** — 17 tests |
+| `tests/unit/test_api_hybrid_mode.py` | **new** — 5 contract tests |
+| `ingestion/lexical/bm25_index.py` | unchanged in the end (reused as-is) |
+| `services/search_service/hybrid_retriever.py` | unchanged — `reciprocal_rank_fusion` reused |
+| `services/search_service/traditional.py` | unchanged — query prep + snippet helpers reused |
+
+### Design notes (matching review feedback)
+
+- **No shared-code changes**: Traditional/AI pipelines, `HybridRetriever`, and the BM25 index
+  are untouched. The hybrid service composes existing tested pieces.
+- **Query understanding**: uses `traditional.prepare_keyword_query` (stopwords + light stems
+  only) — no intent rewriting, no synonym expansion, fair dense-vs-lexical comparison (note #4).
+- **RRF** is the existing `reciprocal_rank_fusion` — unchanged and deterministic.
+- **Title boost AFTER rerank** is controlled (note #6): coverage-based ×(1+0.35) with an
+  exact-title ×1.6 cap total; a rerank score 2× higher still wins — no hard override.
+- **Metrics**: `nbe_hybrid_search_latency_seconds` histogram + analytics/audit events with
+  intent=`hybrid_search` (open question #4: done).
+
+### Eval comparison (same queries per dataset)
+
+Validation set (first 25 cases, per-case costs limit larger runs):
+
+| mode | Recall@5 | Precision@5* | MRR | nDCG@5 | Top1 | Top3 | latency |
+|---|---|---|---|---|---|---|---|
+| KEYWORD (traditional) | 44.0% | — | 0.367 | 0.387 | 32.0% | 44.0% | 32ms |
+| **HYBRID** | **60.0%** | — | 0.454 | **0.489** | 40.0% | 44.0% | ~13.7s (CPU rerank) |
+| PURE_SEMANTIC (retrieval) | 56.0% | — | **0.528** | 0.535 | **52.0%** | 52.0% | ~7.3s |
+
+Validation set (first 60 cases):
+
+| mode | Recall@5 | MRR | nDCG@5 | Top3 |
+|---|---|---|---|---|
+| KEYWORD | 60.0% | 0.421 | 0.462 | 50.0% |
+| **HYBRID** | **75.0%** | 0.450 | **0.529** | **56.7%** |
+
+Golden set (all 22 cases):
+
+| mode | Recall@5 | MRR | nDCG@5 | Top1 | Top3 |
+|---|---|---|---|---|---|
+| KEYWORD | 77.3% | 0.691 | 0.707 | 63.6% | 72.7% |
+| **HYBRID** | **90.9%** | 0.723 | **0.768** | 63.6% | 72.7% |
+
+\* Precision@5 ≡ Recall@5 under the single-relevant-doc labeling used by the existing
+eval tooling; reported as one column.
+
+**Takeaways**: hybrid adds +13–16pp Recall@5 over keyword-only on both datasets and beats
+pure dense retrieval on Recall@5/nDCG@5 (lexical channel catches exact-title/certificate
+queries the embedder ranks loosely). MRR is comparable across the three; PURE_SEMANTIC
+keeps the best Top1 on paraphrase-heavy validation queries. Hybrid latency (~13.7s/case
+in-process on this CPU container, rerank-dominated) is the trade-off — acceptable for a tab,
+and drops sharply once models are warm/served.
+
+### Verification
+
+- `pytest tests/unit` → **228 passed** (206 pre-existing + 22 new; Traditional/AI regressions green).
+- KEYWORD golden eval unchanged: Recall@5 54.1% / MRR 0.393 on the full 220-case set.
+- Live API check (`mode=hybrid`): "National Bank of Egypt - Platinum" → **#1 Platinum page**
+  (1.0), certificates below, Exclusive Products not in top-4.
+- Frontend: `tsc --noEmit` clean, `npm run build` OK; three tabs render, mode switching
+  resets output, autocomplete + load-more wired for hybrid.

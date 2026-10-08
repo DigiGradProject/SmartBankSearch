@@ -52,8 +52,9 @@ class SearchRequest(BaseModel):
     language: Literal["ar", "en", "auto"] = "auto"
     debug: bool = False
     # "ai" = full semantic RAG pipeline (default, unchanged behavior);
-    # "traditional" = BM25 keyword results, no LLM.
-    mode: Literal["ai", "traditional"] = "ai"
+    # "traditional" = BM25 keyword results, no LLM;
+    # "hybrid" = dense + BM25 RRF fusion + reranker, page list, no LLM.
+    mode: Literal["ai", "traditional", "hybrid"] = "ai"
     # Traditional-mode pagination (ignored by AI mode).
     limit: int | None = Field(default=None, ge=1, le=50)
     offset: int = Field(default=0, ge=0)

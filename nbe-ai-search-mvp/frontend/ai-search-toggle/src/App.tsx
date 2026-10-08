@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { FC, ReactNode } from "react";
 
-type SearchMode = "traditional" | "ai";
+type SearchMode = "traditional" | "ai" | "hybrid";
 
 type Citation = {
   title: string;
@@ -44,7 +44,7 @@ type SearchResponse = {
   query_hash?: string | null;
   cache_hit?: boolean;
   faithfulness?: string | null;
-  mode?: "ai" | "traditional";
+  mode?: "ai" | "traditional" | "hybrid";
   results?: TraditionalResult[];
   total_results?: number;
 };
@@ -207,6 +207,13 @@ const IconBuilding: FC<IconProps> = (p) => (
   </Icon>
 );
 
+const IconLayers: FC<IconProps> = (p) => (
+  <Icon {...p}>
+    <path d="m12 3 9 5-9 5-9-5 9-5z" />
+    <path d="m3 13 9 5 9-5" />
+  </Icon>
+);
+
 const IconThumbUp: FC<IconProps> = (p) => (
   <Icon {...p}>
     <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3z" />
@@ -297,6 +304,9 @@ export default function App() {
   const [tradResults, setTradResults] = useState<TraditionalResult[]>([]);
   const [tradTotal, setTradTotal] = useState(0);
   const [tradNoResults, setTradNoResults] = useState(false);
+  const [hybridResults, setHybridResults] = useState<TraditionalResult[]>([]);
+  const [hybridTotal, setHybridTotal] = useState(0);
+  const [hybridNoResults, setHybridNoResults] = useState(false);
   const blurTimeoutRef = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const searchBoxRef = useRef<HTMLDivElement | null>(null);
@@ -353,6 +363,9 @@ export default function App() {
     setTradResults([]);
     setTradTotal(0);
     setTradNoResults(false);
+    setHybridResults([]);
+    setHybridTotal(0);
+    setHybridNoResults(false);
     setError(null);
     setFeedbackSent(null);
   }, [mode]);
@@ -417,18 +430,22 @@ export default function App() {
     setTradResults([]);
     setTradTotal(0);
     setTradNoResults(false);
+    setHybridResults([]);
+    setHybridTotal(0);
+    setHybridNoResults(false);
     setFeedbackSent(null);
     setLastSubmittedQuery(searchQuery);
     setShowAutocomplete(false);
 
     const traditional = searchMode === "traditional";
+    const hybrid = searchMode === "hybrid";
     try {
       const response = await fetch(`${API_BASE}/v1/search`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
-          traditional
-            ? { query: searchQuery, language: "auto", mode: "traditional", limit: TRAD_PAGE_SIZE, offset: 0 }
+          traditional || hybrid
+            ? { query: searchQuery, language: "auto", mode: searchMode, limit: TRAD_PAGE_SIZE, offset: 0 }
             : { query: searchQuery, language: "auto" }
         ),
       });
@@ -440,6 +457,10 @@ export default function App() {
         setTradResults(payload.results ?? []);
         setTradTotal(payload.total_results ?? 0);
         setTradNoResults((payload.results ?? []).length === 0);
+      } else if (hybrid) {
+        setHybridResults(payload.results ?? []);
+        setHybridTotal(payload.total_results ?? 0);
+        setHybridNoResults((payload.results ?? []).length === 0);
       } else {
         setResult(payload);
       }
@@ -452,7 +473,16 @@ export default function App() {
   }
 
   async function loadMoreTraditional() {
-    if (loading || tradResults.length === 0) return;
+    await loadMorePageResults("traditional");
+  }
+
+  async function loadMoreHybrid() {
+    await loadMorePageResults("hybrid");
+  }
+
+  async function loadMorePageResults(listMode: "traditional" | "hybrid") {
+    const current = listMode === "traditional" ? tradResults : hybridResults;
+    if (loading || current.length === 0) return;
     setLoading(true);
     setError(null);
     try {
@@ -462,9 +492,9 @@ export default function App() {
         body: JSON.stringify({
           query: lastSubmittedQuery || query,
           language: "auto",
-          mode: "traditional",
+          mode: listMode,
           limit: TRAD_PAGE_SIZE,
-          offset: tradResults.length,
+          offset: current.length,
         }),
       });
       if (!response.ok) {
@@ -472,11 +502,17 @@ export default function App() {
       }
       const payload = (await response.json()) as SearchResponse;
       const more = payload.results ?? [];
-      setTradResults((current) => {
-        const seen = new Set(current.map((item) => item.url));
-        return [...current, ...more.filter((item) => !seen.has(item.url))];
-      });
-      setTradTotal(payload.total_results ?? tradTotal);
+      const append = (currentList: TraditionalResult[]) => {
+        const seen = new Set(currentList.map((item) => item.url));
+        return [...currentList, ...more.filter((item) => !seen.has(item.url))];
+      };
+      if (listMode === "traditional") {
+        setTradResults(append);
+        setTradTotal(payload.total_results ?? tradTotal);
+      } else {
+        setHybridResults(append);
+        setHybridTotal(payload.total_results ?? hybridTotal);
+      }
     } catch {
       setError(isArabic ? "تعذّر تحميل المزيد." : "Could not load more results.");
     } finally {
@@ -643,7 +679,7 @@ export default function App() {
                 </div>
               </header>
 
-              <div className="mode-toggle" role="tablist" aria-label={ar ? "وضع البحث" : "Search mode"}>
+              <div className="mode-toggle mode-toggle--three" role="tablist" aria-label={ar ? "وضع البحث" : "Search mode"}>
                 <button
                   type="button"
                   role="tab"
@@ -652,7 +688,17 @@ export default function App() {
                   onClick={() => setMode("ai")}
                 >
                   <span className="mode-icon" aria-hidden="true"><IconSparkle size={16} /></span>
-                  <span>{ar ? "البحث الذكي" : "AI Search Mode"}</span>
+                  <span>{ar ? "البحث الذكي" : "AI Search"}</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === "hybrid"}
+                  className={mode === "hybrid" ? "active" : ""}
+                  onClick={() => setMode("hybrid")}
+                >
+                  <span className="mode-icon" aria-hidden="true"><IconLayers size={16} /></span>
+                  <span>{ar ? "البحث المختلط" : "Hybrid Search"}</span>
                 </button>
                 <button
                   type="button"
@@ -662,14 +708,14 @@ export default function App() {
                   onClick={() => setMode("traditional")}
                 >
                   <span className="mode-icon" aria-hidden="true"><IconSearch size={16} /></span>
-                  <span>{ar ? "البحث التقليدي" : "Traditional Search"}</span>
+                  <span>{ar ? "البحث التقليدي" : "Traditional"}</span>
                 </button>
               </div>
 
               <form onSubmit={handleSearch} className="search-form">
                 <div className="search-box" ref={searchBoxRef}>
                   <span className="input-icon" aria-hidden="true">
-                    {mode === "ai" ? <IconSparkle size={22} /> : <IconSearch size={22} />}
+                    {mode === "ai" ? <IconSparkle size={22} /> : mode === "hybrid" ? <IconLayers size={22} /> : <IconSearch size={22} />}
                   </span>
                   <input
                     ref={inputRef}
@@ -870,6 +916,79 @@ export default function App() {
                       {ar
                         ? "ابحث بالكلمات المفتاحية في صفحات البنك الأهلي المصري المفهرسة."
                         : "Keyword search across NBE's indexed pages."}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {mode === "hybrid" && !loading && !error && hybridResults.length > 0 && (
+                <section className="traditional-results" aria-live="polite">
+                  <div className="section-heading">
+                    <span className="section-icon" aria-hidden="true"><IconLayers size={13} /></span>
+                    <h3>
+                      {ar
+                        ? `${hybridTotal} نتيجة من البحث المختلط`
+                        : `${hybridTotal} hybrid results from NBE pages`}
+                    </h3>
+                  </div>
+                  <div className="trad-list">
+                    {hybridResults.map((item) => (
+                      <a
+                        key={item.url}
+                        className="trad-card"
+                        dir={item.language === "ar" ? "rtl" : "ltr"}
+                        href={item.url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <span className="trad-title">{highlightTerms(item.title, item.terms)}</span>
+                        {item.snippet && (
+                          <span className="trad-snippet">{highlightTerms(item.snippet, item.terms)}</span>
+                        )}
+                        <span className="trad-meta">
+                          {item.category && <span className="trad-chip">{item.category}</span>}
+                          <span className="trad-lang">{item.language === "ar" ? "عربي" : "English"}</span>
+                          <span className="trad-score">{Math.round(item.score * 100)}%</span>
+                          <span className="trad-arrow" aria-hidden="true"><IconArrowUpRight size={13} /></span>
+                        </span>
+                      </a>
+                    ))}
+                  </div>
+                  {hybridResults.length < hybridTotal && (
+                    <button
+                      type="button"
+                      className="load-more"
+                      onClick={() => void loadMoreHybrid()}
+                    >
+                      {ar ? "عرض المزيد من النتائج" : "Load more results"}
+                    </button>
+                  )}
+                </section>
+              )}
+
+              {mode === "hybrid" && !loading && !error && hybridNoResults && (
+                <div className="notice-state" role="status">
+                  <span className="state-icon" aria-hidden="true"><IconLayers size={18} /></span>
+                  <div className="state-copy">
+                    <strong>{ar ? "لا توجد نتائج مطابقة" : "No matching pages"}</strong>
+                    <p>
+                      {ar
+                        ? "جرّب كلمات مفتاحية أقل أو مختلفة، أو استخدم البحث الذكي."
+                        : "Try fewer or different keywords, or use AI Search."}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {mode === "hybrid" && !query.trim() && hybridResults.length === 0 && (
+                <div className="notice-state" role="status">
+                  <span className="state-icon" aria-hidden="true"><IconInfo size={18} /></span>
+                  <div className="state-copy">
+                    <strong>{ar ? "البحث المختلط" : "Hybrid Search"}</strong>
+                    <p>
+                      {ar
+                        ? "يجمع بين البحث الدلالي والكلمات المفتاحية لعرض أفضل الصفحات المطابقة."
+                        : "Combines semantic and keyword retrieval to surface the best-matching pages."}
                     </p>
                   </div>
                 </div>
