@@ -7,13 +7,34 @@ import re
 from ingestion.embedding.vector_store import RetrievedChunk, VectorStore
 from ingestion.lexical.bm25_index import get_bm25_index, tokenize_text
 from services.rag.language import detect_language, prepare_query
-from services.search_service.keyword_rank import extract_query_terms, keyword_overlap_score
+from services.search_service.keyword_rank import apply_spacing_aliases, extract_query_terms, keyword_overlap_score
 from services.search_service.query_catalog import TOPIC_QUERIES_AR, TOPIC_QUERIES_EN, catalog_for_language
 from services.search_service.query_expand import expand_query, expand_query_intent
 from shared.arabic_normalize import normalize_arabic
 from shared.schemas import SearchSuggestion
 
 MIN_QUERY_LENGTH = 2
+
+# Corporate prefix the scraper prepends to most page titles ("National Bank
+# of Egypt - Al Ahly points"). Suggestions feed the search box, where the
+# prefix is dead weight that dilutes BM25 — keep only the meaningful part.
+_TITLE_PREFIXES = (
+    "National Bank of Egypt - ",
+    "البنك الأهلى المصرى - ",
+    "البنك الأهلي المصرى - ",
+)
+
+
+def _clean_title(title: str) -> str:
+    for prefix in _TITLE_PREFIXES:
+        if title.startswith(prefix):
+            cleaned = title[len(prefix) :].strip()
+            # Keep the full title when the rest is generic or too short
+            # ("Home", "FAQs", "ارشادات") so the suggestion still identifies
+            # the page; multi-word remainders are always specific enough.
+            is_specific = len(cleaned) >= 4 and (" " in cleaned or "\u0600" <= cleaned[0] <= "\u06FF")
+            return cleaned if is_specific else title
+    return title
 
 
 def _normalize_for_match(text: str, language: str) -> str:
@@ -44,6 +65,8 @@ def _catalog_score(query_norm: str, entry_query: str, entry_keywords: tuple[str,
 
 
 def _bm25_title_matches(query: str, language: str, limit: int) -> list[SearchSuggestion]:
+    # "alahly points" must match pages titled "Al Ahly Points": re-space
+    # before BM25 so compound brand words tokenize like the corpus does.
     """Suggest real page titles from the standalone BM25 index (no embedder).
 
     Traditional mode fetches autocomplete on every keystroke (catalog_only=True)
@@ -62,8 +85,8 @@ def _bm25_title_matches(query: str, language: str, limit: int) -> list[SearchSug
     # Exact BM25 ranking, then fall back to normalized-substring title match
     # for partial/inflected prefixes that tokenize differently.
     scored: list[tuple[str, str, str | None, float]] = []
-    for chunk, bm25_score in index.query(query, language, top_k=limit * 4):
-        title = chunk.title.strip()
+    for chunk, bm25_score in index.query(apply_spacing_aliases(query), language, top_k=limit * 4):
+        title = _clean_title(chunk.title.strip())
         if title:
             # Normalize raw BM25 doc scores into a stable 0..1 band below the
             # static-catalog scores (catalog stays authoritative up top).
@@ -71,18 +94,23 @@ def _bm25_title_matches(query: str, language: str, limit: int) -> list[SearchSug
 
     if not scored:
         query_norm = _normalize_for_match(query, language)
+        spacing_norm = _normalize_for_match(apply_spacing_aliases(query), language)
         seen_substring: set[str] = set()
         for chunk in index._chunks:
             title_norm = _normalize_for_match(chunk.title, chunk.language or language)
-            if query_norm and query_norm in title_norm:
-                title = chunk.title.strip()
+            matched = (
+                (query_norm and query_norm in title_norm)
+                or (spacing_norm != query_norm and spacing_norm in title_norm)
+            )
+            if matched:
+                title = _clean_title(chunk.title.strip())
                 if title and title not in seen_substring:
                     seen_substring.add(title)
                     # Prefix hits rank above mid-title hits; other-language
                     # titles rank below same-language ones so the dropdown
                     # stays clean unless the corpus is nearly empty.
                     same_language = language == "auto" or chunk.language == language
-                    starts = title_norm.startswith(query_norm)
+                    starts = title_norm.startswith(spacing_norm or query_norm)
                     base = 0.35 if starts else 0.25
                     scored.append((title, chunk.language, chunk.url, base if same_language else base - 0.2))
 

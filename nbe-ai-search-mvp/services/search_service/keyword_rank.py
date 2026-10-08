@@ -7,6 +7,27 @@ from shared.arabic_normalize import normalize_arabic
 ARABIC_TERM = re.compile(r"[\u0600-\u06FF]{2,}")
 ENGLISH_TERM = re.compile(r"[a-zA-Z]{3,}")
 
+# Compound brand words users type without the space the corpus uses
+# ("alahly points" vs page title "Al Ahly points"). Whole-token BM25 can
+# never bridge that, so normalize the spacing at query time. Keys are
+# word-bounded Latin; applying this to Arabic text is a no-op.
+EN_SPACING_ALIASES = {
+    "alahly": "al ahly",
+    "alahli": "al ahli",
+    "alahlly": "al ahly",
+}
+
+_SPACING_ALIAS_RE = re.compile(
+    r"\b(?:" + "|".join(EN_SPACING_ALIASES) + r")\b", re.IGNORECASE
+)
+
+
+def apply_spacing_aliases(text: str) -> str:
+    """Re-space common compound brand words ("alahly" → "al ahly")."""
+    return _SPACING_ALIAS_RE.sub(
+        lambda match: EN_SPACING_ALIASES[match.group(0).lower()], text
+    )
+
 TERM_ALIASES = {
     "انواع": "شهادات",
     "الشهادات": "شهادات",
@@ -30,7 +51,7 @@ def extract_query_terms(query: str, language: str) -> list[str]:
     if language == "ar":
         terms = ARABIC_TERM.findall(normalize_arabic(query))
     else:
-        terms = [term.lower() for term in ENGLISH_TERM.findall(query.lower())]
+        terms = [term.lower() for term in ENGLISH_TERM.findall(apply_spacing_aliases(query).lower())]
 
     normalized: list[str] = []
     for term in terms:

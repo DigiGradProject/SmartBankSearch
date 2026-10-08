@@ -282,6 +282,19 @@ def test_service_limit_is_capped(service: TraditionalSearchService):
     assert len(outcome.results) <= settings.keyword_results_max_limit
 
 
+def test_prepare_query_spacing_aliases_compound_brand_words():
+    """"alahly points" must reach BM25 as "al ahly points" — the corpus
+    stores "Al Ahly" as two tokens, so the compound never matched."""
+    kq = prepare_keyword_query("alahly points", "en")
+    assert "al ahly points" in kq.bm25_query
+    assert "alahly" not in kq.bm25_query.split()
+
+
+def test_prepare_query_spacing_aliases_leave_normal_queries_unchanged():
+    kq = prepare_keyword_query("personal loan", "en")
+    assert kq.bm25_query.startswith("personal loan")
+
+
 def test_prepare_query_highlight_terms_exclude_stopwords():
     kw = prepare_keyword_query("Where is the nearest NBE branch?", "en")
     assert "where" not in kw.terms_by_language["en"]

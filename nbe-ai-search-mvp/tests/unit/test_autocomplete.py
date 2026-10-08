@@ -67,6 +67,39 @@ def test_traditional_mode_bm25_title_matches(monkeypatch):
     assert any("حساب" in s.label for s in ar_suggestions)
 
 
+def test_bm25_title_suggestions_strip_corporate_prefix(monkeypatch):
+    """Suggestions feed the search box, so "National Bank of Egypt - Al Ahly
+    points" should be trimmed to the meaningful part."""
+    import services.search_service.autocomplete as ac
+
+    assert ac._clean_title("National Bank of Egypt - Al Ahly points") == "Al Ahly points"
+    assert ac._clean_title("البنك الأهلى المصرى - القروض") == "القروض"
+    # Generic remainder keeps the full title so the page stays identifiable.
+    assert ac._clean_title("National Bank of Egypt - Home") == "National Bank of Egypt - Home"
+    assert ac._clean_title("Credit Cards") == "Credit Cards"
+
+
+def test_bm25_title_spacing_alias_matches_compound_brand(monkeypatch):
+    from ingestion.lexical.bm25_index import BM25Index
+    from shared.schemas import ChunkRecord
+
+    import services.search_service.autocomplete as ac
+
+    index = BM25Index()
+    index.build([
+        ChunkRecord(
+            chunk_id="c1", document_id="d1", chunk_index=0, content_hash="h1",
+            title="Al Ahly points", url="https://nbe.com.eg/points",
+            language="en", text="Al Ahly points loyalty program", doc_type="page",
+            category="", is_stub=False, canonical_url_slug="",
+        ),
+    ])
+    monkeypatch.setattr(ac, "get_bm25_index", lambda: index)
+
+    suggestions = ac.build_autocomplete("alahly points", "en", limit=5, catalog_only=True)
+    assert any(s.label == "Al Ahly points" for s in suggestions)
+
+
 def test_bm25_title_matches_empty_index_returns_nothing(monkeypatch):
     from ingestion.lexical.bm25_index import BM25Index
 

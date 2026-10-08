@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 
 from ingestion.lexical.bm25_index import BM25Index, IndexedChunk, get_bm25_index, tokenize_text
 from services.rag.language import detect_language
-from services.search_service.keyword_rank import extract_query_terms
+from services.search_service.keyword_rank import EN_SPACING_ALIASES, apply_spacing_aliases, extract_query_terms
 from services.search_service.synonyms import expand_with_synonyms
 from shared.arabic_normalize import normalize_arabic
 from shared.config import settings
@@ -151,7 +151,11 @@ def prepare_keyword_query(query: str, language: str = "auto") -> KeywordQuery:
                 terms.append(stem)
         return terms
 
-    tokens = tokenize_text(query, resolved)
+    # Re-space compound brand words first ("alahly points" → "al ahly"): the
+    # fixed index stores whole tokens, so BM25 can never match "alahly" to
+    # the corpus's "Al Ahly" without this normalization.
+    normalized_query = apply_spacing_aliases(query)
+    tokens = tokenize_text(normalized_query, resolved)
     content = [token for token in tokens if token not in STOPWORDS[resolved]]
     content = content[: settings.keyword_max_query_tokens]
 
@@ -166,6 +170,19 @@ def prepare_keyword_query(query: str, language: str = "auto") -> KeywordQuery:
 
     cleaned = " ".join(content)
     expanded = expand_with_synonyms(cleaned, resolved)
+    if resolved == "en":
+        # Re-spaced form must reach BM25 verbatim: synonym expansion runs on
+        # the raw words and can rejoin/re-shuffle them ("al ahly" → "alahly").
+        expanded = apply_spacing_aliases(expanded)
+        # Drop the original compound tokens ("alahly") that the re-spaced
+        # query already covers, so BM25 doesn't weigh both variants.
+        original_compounds = {
+            token for token in cleaned.split() if token in EN_SPACING_ALIASES
+        }
+        if original_compounds:
+            expanded = " ".join(
+                token for token in expanded.split() if token not in original_compounds
+            )
 
     extra_stems: list[str] = []
     for token in content:
@@ -192,7 +209,16 @@ def prepare_keyword_query(query: str, language: str = "auto") -> KeywordQuery:
             if len(plural) >= _MIN_STEM_LEN and plural not in extra_stems:
                 extra_stems.append(plural)
 
-    bm25_query = " ".join(part for part in (expanded, " ".join(extra_stems)) if part)
+    # For re-spaced brand queries ("alahly" → "al ahly") the spaced form must
+    # reach BM25 verbatim, but only then: otherwise stopword-filtered words
+    # would leak back in via the verbatim copy.
+    bm25_parts = [expanded]
+    if normalized_query.strip() != cleaned and any(
+        token in EN_SPACING_ALIASES for token in cleaned.split()
+    ):
+        bm25_parts.append(normalized_query)
+    bm25_parts.append(" ".join(extra_stems))
+    bm25_query = " ".join(part for part in bm25_parts if part)
     terms_by_language[other] = _terms_for(other)
 
     # Adjacent raw content words become phrases ("شهادات بلادي", "car loan")
