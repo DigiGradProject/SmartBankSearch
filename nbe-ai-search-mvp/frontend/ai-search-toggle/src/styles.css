@@ -212,11 +212,7 @@ input:focus-visible {
 .search-card {
   position: relative;
   isolation: isolate;
-  /* No overflow clipping here: the autocomplete dropdown is absolutely
-     positioned inside and must be allowed to extend past the card's bottom
-     edge (traditional mode shows it on a short, still-empty card). The
-     decorative corner spans self-round instead — see .card-corner-*. */
-  overflow: visible;
+  overflow: hidden;
   padding: 36px clamp(22px, 4vw, 46px) 40px;
   background: var(--white);
   border: 1px solid rgba(0, 100, 62, 0.1);
@@ -235,9 +231,6 @@ input:focus-visible {
 .card-corner-tl {
   top: 0;
   left: 0;
-  /* Self-round the outer corner: replaces the card's overflow:hidden clip
-     (removed so the autocomplete dropdown can overflow the card). */
-  border-top-left-radius: var(--radius-card);
   background: linear-gradient(135deg, var(--green) 0 58%, var(--gold) 58% 74%, transparent 74%);
   clip-path: polygon(0 0, 100% 0, 0 100%);
 }
@@ -245,7 +238,6 @@ input:focus-visible {
 .card-corner-br {
   right: 0;
   bottom: 0;
-  border-bottom-right-radius: var(--radius-card);
   background: linear-gradient(315deg, var(--green) 0 58%, var(--gold) 58% 74%, transparent 74%);
   clip-path: polygon(100% 100%, 0 100%, 100% 0);
 }
