@@ -307,6 +307,10 @@ export default function App() {
   const [hybridResults, setHybridResults] = useState<TraditionalResult[]>([]);
   const [hybridTotal, setHybridTotal] = useState(0);
   const [hybridNoResults, setHybridNoResults] = useState(false);
+  // Hybrid RAG: grounded answer + citations rendered ABOVE the ranked pages.
+  const [hybridAnswer, setHybridAnswer] = useState<string | null>(null);
+  const [hybridCitations, setHybridCitations] = useState<Citation[]>([]);
+  const [hybridConfidence, setHybridConfidence] = useState(0);
   const blurTimeoutRef = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const searchBoxRef = useRef<HTMLDivElement | null>(null);
@@ -366,6 +370,9 @@ export default function App() {
     setHybridResults([]);
     setHybridTotal(0);
     setHybridNoResults(false);
+    setHybridAnswer(null);
+    setHybridCitations([]);
+    setHybridConfidence(0);
     setError(null);
     setFeedbackSent(null);
   }, [mode]);
@@ -433,6 +440,9 @@ export default function App() {
     setHybridResults([]);
     setHybridTotal(0);
     setHybridNoResults(false);
+    setHybridAnswer(null);
+    setHybridCitations([]);
+    setHybridConfidence(0);
     setFeedbackSent(null);
     setLastSubmittedQuery(searchQuery);
     setShowAutocomplete(false);
@@ -461,6 +471,10 @@ export default function App() {
         setHybridResults(payload.results ?? []);
         setHybridTotal(payload.total_results ?? 0);
         setHybridNoResults((payload.results ?? []).length === 0);
+        // Grounded answer (Hybrid RAG) — shown first, above the ranked list.
+        setHybridAnswer(payload.answer ?? null);
+        setHybridCitations(payload.citations ?? []);
+        setHybridConfidence(payload.answer ? payload.confidence : 0);
       } else {
         setResult(payload);
       }
@@ -921,6 +935,64 @@ export default function App() {
                 </div>
               )}
 
+              {/* --- Hybrid RAG: grounded answer + citations FIRST --- */}
+              {mode === "hybrid" && !loading && !error && hybridAnswer && (
+                <article className="result hybrid-answer" aria-live="polite">
+                  <div className="result-heading">
+                    <div>
+                      <span className="result-kicker">
+                        {ar ? "إجابة مستندة إلى نتائج البحث المختلط" : "Hybrid grounded answer"}
+                      </span>
+                      <h2>{ar ? "إليك ما وجدناه" : "Here is what we found"}</h2>
+                    </div>
+                    <div className="result-meta" aria-label="Answer details">
+                      <span className="confidence-pill">
+                        {Math.round(hybridConfidence * 100)}% {ar ? "ثقة" : "confidence"}
+                      </span>
+                    </div>
+                  </div>
+                  <div
+                    className="answer"
+                    dir={isArabic ? "rtl" : "ltr"}
+                  >
+                    {hybridAnswer}
+                  </div>
+                  {hybridCitations.length > 0 && (
+                    <section className="citations" aria-labelledby="hybrid-sources-title">
+                      <div className="section-heading">
+                        <span className="section-icon" aria-hidden="true"><IconShield size={13} /></span>
+                        <h3 id="hybrid-sources-title">{ar ? "المصادر" : "Sources"}</h3>
+                      </div>
+                      <div className="citation-list">
+                        {hybridCitations.map((citation, index) => (
+                          <a
+                            className="citation-card"
+                            key={citation.url}
+                            href={citation.url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <span className="citation-index" aria-hidden="true">{index + 1}</span>
+                            <span className="citation-copy" dir="auto">
+                              <strong>{citation.title}</strong>
+                              <span>{ar ? "الموقع الرسمي للبنك الأهلي المصري" : "Official NBE website"}</span>
+                            </span>
+                            {(citation.relevance_score != null || citation.category) && (
+                              <span className="citation-meta">
+                                {citation.category ? `${citation.category} · ` : ""}
+                                {citation.relevance_score != null
+                                  ? `${Math.round(citation.relevance_score * 100)}%`
+                                  : ""}
+                              </span>
+                            )}
+                          </a>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+                </article>
+              )}
+
               {mode === "hybrid" && !loading && !error && hybridResults.length > 0 && (
                 <section className="traditional-results" aria-live="polite">
                   <div className="section-heading">
@@ -931,6 +1003,11 @@ export default function App() {
                         : `${hybridTotal} hybrid results from NBE pages`}
                     </h3>
                   </div>
+                  {hybridAnswer && (
+                    <p className="trad-rank-note">
+                      {ar ? "الترتيب ناتج عن محرك الاسترجاع المختلط" : "Ranked by the hybrid retrieval engine"}
+                    </p>
+                  )}
                   <div className="trad-list">
                     {hybridResults.map((item) => (
                       <a

@@ -1,6 +1,6 @@
-# Plan: Hybrid Search tab (dense + BM25, RRF-fused, no LLM)
+# Plan: Hybrid Search tab (dense + BM25, RRF-fused) → Hybrid RAG (Phase 2)
 
-Status: **IMPLEMENTED on branch `feat/hybrid-search-tab`**
+Status: **IMPLEMENTED on branch `feat/hybrid-search-tab`; Phase 2 (grounded LLM answer) below**
 Branch target: new branch `feat/hybrid-search-tab` off current `main`
 Owner: Buffy + user review
 
@@ -9,25 +9,88 @@ Owner: Buffy + user review
 ## 1. Goal
 
 Add a third search-mode tab, **Hybrid Search**, next to "AI Search Mode" and "Traditional Search".
-It shows the hybrid retrieval pipeline — BGE-M3 dense vector results **fused with BM25 lexical
-results via Reciprocal Rank Fusion (RRF)**, then the cross-encoder reranker — as a **plain ranked
-list of pages**, like the Traditional tab:
+Phase 1 shipped the retrieval pipeline — BGE-M3 dense vector results **fused with BM25 lexical
+results via Reciprocal Rank Fusion (RRF)**, then the cross-encoder reranker — as a ranked list of
+pages. **Phase 2 (Hybrid RAG) adds a grounded LLM answer with citations built from the top ranked
+results, displayed first, followed by the unchanged ranked page list.**
 
 - ✅ **Included**: hybrid retrieval (dense + lexical), RRF fusion, reranker, per-page dedup,
   snippets, scores, language tags, pagination ("Load more"), autocomplete dropdown,
-  Arabic/English rendering.
-- ❌ **Excluded**: LLM answer generation, intent business-rule boosts, confidence/decision gate,
-  caching semantics of AI mode. The user sees *what the retriever ranks* — no generated answer.
+  Arabic/English rendering, **grounded LLM answer + citations (Phase 2)**.
+- ❌ **Excluded** (Phase 2 still excluded): AI-mode intent business-rule boosts, AI-mode
+  confidence/decision gate, AI-mode query expansion/planning, exact + semantic caching.
+  Retrieval ordering is untouched by generation — the LLM never reorders pages.
 
-This fills the gap between the tabs:
+The modes after Phase 2:
 
-| | Traditional | **Hybrid (new)** | AI |
+| | Traditional | **Hybrid** | AI |
 |---|---|---|---|
-| Retrieval | BM25 only | **dense + BM25 (RRF)** | dense + BM25 (RRF) |
+| Retrieval | BM25 only | **dense + BM25 (RRF)** | dense + BM25 (RRF) + rules/gate |
 | Reranker | no | **yes** | yes |
 | Business rules / gate | no | **no** | yes |
-| LLM answer | no | **no** | yes |
-| Output | page list | **page list** | answer + citations |
+| LLM answer | no | **yes (grounded in top pages, citations)** | yes |
+| Output | page list | **answer + citations first, then page list** | answer + citations |
+
+---
+
+## 1b. Phase 2 — Hybrid RAG design (final architecture, inspected implementation)
+
+Verified against the actual code before writing this: `services/api/orchestrator.py`
+(`Orchestrator.search` → `ContextBuilder.build` → `LLMService.generate_answer` →
+`wrap_plain_answer` → `evaluate_answer`), `services/llm_service/llm.py` (grounding system
+prompt, `NO_ANSWER` refusal detection, tier escalation, graceful `None` on error),
+`services/context_builder/builder.py` (built-context + citation selection scoped to retrieved
+chunks), `shared/schemas.py` (`SearchResponse` already carries `answer/citations/abstention_reason`).
+
+**Contract principles (user requirements #2–#7):**
+
+1. **Three modes stay intact.** Traditional and AI handlers are untouched; hybrid gets answer
+   generation added inside its own branch/service — no routing to `mode=ai`.
+2. **Retrieval pipeline unchanged**: BM25 top-50 + dense top-50 → RRF → reranker → title boost →
+   page dedup → normalize. The final ranked `pages` list is *frozen* before generation; the
+   `results` list in the response is built from that frozen order.
+3. **Grounded generation reuses AI-mode building blocks**, in its own thin layer:
+   - `ContextBuilder.build(query, top_chunks)` → `BuiltContext{context_text, citations}` —
+     context text + citation list assembled only from retrieved chunks (existing junk/URL
+     filtering and citation floors apply), `compress=False` (chunks already rerank-picked).
+   - `LLMService.generate_answer(query, context_text, language)` → `(answer, confidence)`;
+     it internally detects refusals/`NO_ANSWER` and returns `None` on failure/insufficient
+     evidence (with its keyword-overlap `_fallback_answer`).
+   - `wrap_plain_answer(answer, language, citations, intent="hybrid_search")` for the
+     structured `### Answer / ### Key Information / ### Source` shape AI mode emits.
+   - NOT reused (Phase 1 decision stands): AI-mode caches (exact + semantic), plan_query sub
+   -query expansion, intent classifier, business rules, catalog answer builders, self-eval
+     regeneration loop. Hybrid keeps one LLM call; a regeneration loop would double latency.
+4. **Language handling**: reuse `prepare_keyword_query` resolution + LLM respond-in-user-language
+   prompt rule; answer `dir` follows `result.language`/`isArabic` in the frontend (existing).
+5. **Grounding / abstention**: if the context is empty → `abstention_reason="insufficient_context"`;
+   if `generate_answer` yields no answer → return pages with the retrieved-pages list intact
+   (graceful degradation), still `answered` pages-wise. **If the LLM call throws/times out →
+   the answer is simply `None`; the request never fails** — pages are returned normally.
+6. **Latency bookkeeping**: retrieval phase (existing hybrid service timing) vs. generation
+   phase timed separately; result logged: `hybrid_search_completed` gains `retrieval_ms`,
+   `generation_ms`, `total_ms`; top-level `pages` unaffected.
+7. **API contract (additive, backward compatible)**: `SearchResponse` for hybrid may now carry
+   `answer` (string, or null), `citations` (ContextBuilder citations — URLs constrained to the
+   retrieved set by construction), `answered` (true only when answer present),
+   `abstention_reason` (`insufficient_context`/`no_hybrid_matches`/
+   `hybrid_index_unavailable`); `confidence` stays for answer confidence when answered, else
+   pages-present flag. AI/traditional responses unchanged.
+8. **Frontend (Hybrid tab)**: render an **answer card first** — reuse the AI-mode answer+styles
+   (`result.answer`, `citations` mapping, `confidence pill`) as a shared JSX block owned by the
+   hybrid section, then the existing ranked `trad-card` list *below*, order exactly as returned
+   by the API.
+
+**Files changed (Phase 2):**
+
+| File | Change |
+|---|---|
+| `services/search_service/hybrid_pages.py` | `HybridPagesOutcome` gains `answer/citations/generation_error` + `generate_answer()` step (context build + LLM call, failure-tolerant) |
+| `services/api/main.py` | hybrid branch forwards answer/citations/confidence/answered; analytics/audit gains `llm_ms` |
+| `shared/schemas.py` | comment-only change (`hybrid` description gains "LLM answer?") |
+| `frontend/ai-search-toggle/src/App.tsx` | hybrid section renders answer card (answer + citations), then ranked list; state gains `hybridAnswer` |
+| `tests/unit/test_hybrid_pages.py` | new tests — grounded citation URLs ⊆ retrieved, insufficient-evidence abstention, LLM-failure fallback |
+| `tests/unit/test_api_hybrid_mode.py` | contract test for answer+citations present; regressions for ai/traditional untouched |
 
 ## 2. Why not just reuse an existing endpoint?
 
@@ -258,3 +321,49 @@ and drops sharply once models are warm/served.
   (1.0), certificates below, Exclusive Products not in top-4.
 - Frontend: `tsc --noEmit` clean, `npm run build` OK; three tabs render, mode switching
   resets output, autocomplete + load-more wired for hybrid.
+
+---
+
+## 10. Phase 2 implementation results (2026-10-09) — Hybrid RAG
+
+### What changed (verbatim per §1b plan)
+
+| File | Change |
+|---|---|
+| `services/search_service/hybrid_pages.py` | `HybridPagesOutcome` gains `answer/citations/answer_confidence/generation_error/retrieval_ms/generation_ms/total_ms` + internal `context_chunks`; new `search_with_answer()` (frozen ranking → grounded context from top `retrieval_top_k` chunks → existing `LLMService.generate_answer` → `wrap_plain_answer`); ctor seams `context_builder=`/`llm_service=`. Generation is fail-open: any exception → `generation_error=True`, pages returned. `search()` contract unchanged (Phase 1 tests pass untouched). |
+| `services/api/main.py` | hybrid branch calls `search_with_answer`; response now carries `answer`/`citations`/`confidence` (LLM answer confidence when answered); `abstention_reason="insufficient_context"` when pages exist but the LLM abstained/failed; `_log_hybrid_event` logs retrieval vs generation vs total latency, `HYBRID_RAG_ANSWER` decision, and `llm` model fields. |
+| `frontend/ai-search-toggle/src/App.tsx` | New `hybridAnswer/hybridCitations/hybridConfidence` state; answer card (kicker + confidence pill + answer + Sources citations) rendered FIRST, ranked pages below with a "ranked by the hybrid retrieval engine" note; state resets on mode switch / new search. |
+| `frontend/ai-search-toggle/src/styles.css` | `.hybrid-answer` pill tweak + `.trad-rank-note`. |
+| `shared/schemas.py` | comment-only (`mode="hybrid"` doc updated). |
+| `tests/unit/test_hybrid_pages.py` | +7 RAG tests: frozen-ranking + answer wrapper, citations ⊆ retrieved URLs, empty-context abstention (LLM untouched), LLM-throw fail-open, LLM-refusal abstention, pagination skips generation, plain-`search()` regression. |
+| `tests/unit/test_api_hybrid_mode.py` | e2e test updated: `answer` is no longer asserted `None`; grounded citations must be ⊆ retrieved result URLs when an answer is present; pages-only contract asserted when the live LLM is unavailable. |
+
+### NOT inherited from AI mode (per requirement #6 — verified)
+
+- No `plan_query` sub-query expansion, no intent classification, no business rules, no
+  catalog answer builders, no exact/semantic caching, no self-eval regeneration loop
+  (single LLM call keeps hybrid latency bounded). Grounding + `NO_ANSWER` abstention
+  come from the shared `LLMService` prompt contract; citation floors/junk filtering
+  come from the shared `ContextBuilder`.
+
+### Grounding contract (test-enforced)
+
+- Citations can only be built from chunks in the frozen pool (ContextBuilder input),
+  asserted ⊆ retrieved page URLs.
+- Empty grounded context → abstain (`insufficient_context`), pages untouched.
+- LLM refusal/`NO_ANSWER` → abstain, pages untouched, no error state.
+- LLM client failure (timeout/500) → `generation_error=True`, HTTP 200 with pages only.
+- Answer text wrapped via shared `wrap_plain_answer` (### Answer / Key Information / Source).
+- Latency: `retrieval_ms` (Phase-1 pipeline), `generation_ms` (LLM), `total_ms` (sum) —
+  logged in `hybrid_search_with_answer_completed` and audit `latency_ms`.
+
+### Verification (2026-10-09)
+
+- `pytest tests/unit` → **235 passed** (228 pre-existing + 7 new; live e2e included
+  a REAL grounded answer for "platinum card": structured ### sections + citation,
+  retrieval_ms 46.8s cold vs generation_ms 25.2s on CPU).
+- Frontend: `tsc --noEmit` clean, `npm run build` OK (new bundle)
+- HYBRID retrieval regression eval on 5 golden cases: Recall@5 100%, MRR/nDCG@5 1.000,
+  identical to Phase-1 HYBRID on the same subset (retrieval ordering untouched by
+  generation — the eval calls the ranking-only path, and the live e2e asserted the
+  same page list with and without an answer).

@@ -926,6 +926,15 @@ input:focus-visible {
 
 /* ================================================================== */
 /*  Result / answer                                                    */
+.hybrid-answer .result-meta .confidence-pill {
+  /* Same pill as AI mode, slightly muted to distinguish the modes. */
+  opacity: 0.95;
+}
+.trad-rank-note {
+  margin: -2px 0 10px;
+  font-size: 12px;
+  color: var(--ink-soft, #6b7280);
+}
 /* ================================================================== */
 
 .result {
