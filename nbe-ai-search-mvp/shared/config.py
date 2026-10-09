@@ -82,6 +82,12 @@ class Settings(BaseSettings):
     llm_tier2_enabled: bool = True
     llm_timeout_seconds: float = 90.0
     llm_fallback_enabled: bool = True
+    # Hybrid RAG generation budget: one tier-1 attempt, no tier-2 escalation.
+    # Without this, a slow/stuck Ollama burns 2×90s (tier1+tier2 timeouts) and
+    # the UI proxy cuts the connection first → "Something went wrong" in the
+    # browser even though the backend eventually answered (live incident).
+    hybrid_llm_timeout_seconds: float = 45.0
+    hybrid_llm_tier2_enabled: bool = False
 
     # Enterprise feature flags (Phase 3–4)
     # Layered intent: BGE-M3 semantic primary, regex fallback (see intent_fallback.py)

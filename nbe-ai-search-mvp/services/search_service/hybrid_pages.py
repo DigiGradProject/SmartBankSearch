@@ -565,7 +565,12 @@ class HybridPageSearchService:
         Broad rate questions must list every currency in the retrieved table,
         not just USD (the shared prompt's single-currency template). AI mode
         keeps its exact prompt — the override flag is set only for this call
-        and restored immediately (no shared-state leakage).
+        and restored immediately (no shared-state leakage). The flag also
+        activates the hybrid generation budget: ONE bounded tier-1 attempt
+        (`hybrid_llm_timeout_seconds`, no tier-2 escalation) so a slow Ollama
+        can never push a hybrid request past the UI proxy's ceiling
+        (regression: two 90s timeouts → 200s request → browser "Something
+        went wrong" even though the backend later answered).
         """
         llm = self._get_llm()
         try:

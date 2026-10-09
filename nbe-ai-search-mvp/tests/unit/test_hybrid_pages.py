@@ -558,3 +558,36 @@ def test_hybrid_prompt_override_scoped_and_restored():
     default_prompt = capturing._build_prompt("exchange rates", "ctx", "en")
     assert "one line per currency" not in default_prompt
     assert "If the question asks for exchange rates" in default_prompt
+
+
+def test_hybrid_llm_budget_bounds_tier_and_timeout():
+    """Regression (live incident): tier1+tier2 each timing out at 90s pushed a
+    hybrid request to ~200s → UI proxy cut it → frontend error page. The
+    hybrid call must use ONE bounded tier-1 attempt (45s) with tier-2 disabled,
+    while AI mode's settings stay untouched."""
+    from shared.config import settings
+    from services.llm_service.llm import LLMService
+
+    llm = LLMService()
+    # AI mode defaults unchanged.
+    assert llm._timeout() == settings.llm_timeout_seconds
+    assert llm._tier2_enabled() == settings.llm_tier2_enabled
+    # Hybrid budget: bounded timeout, tier-2 off.
+    llm.hybrid_broad_answer = True
+    assert llm._timeout() == settings.hybrid_llm_timeout_seconds
+    assert llm._tier2_enabled() is False
+    assert settings.hybrid_llm_timeout_seconds < 150.0  # under the UI proxy ceiling
+    llm.hybrid_broad_answer = False
+    assert llm._timeout() == settings.llm_timeout_seconds
+
+
+@pytest.mark.usefixtures()
+def test_generate_with_model_accepts_call_scoped_timeout():
+    """_generate_with_model honors an explicit per-call timeout argument."""
+    import inspect
+
+    from services.llm_service.llm import LLMService
+
+    sig = inspect.signature(LLMService._generate_with_model)
+    assert "timeout" in sig.parameters
+    assert sig.parameters["timeout"].kind is inspect.Parameter.KEYWORD_ONLY
