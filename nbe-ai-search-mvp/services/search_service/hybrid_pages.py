@@ -27,6 +27,7 @@ Everything downstream of the channel queries reuses existing, tested code:
 
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass, field, replace
 
@@ -63,10 +64,21 @@ _HYBRID_TITLE_BOOST = 0.35  # ×(1 + 0.35·coverage) → up to ×1.35
 # Exact normalized-title match gets a slightly stronger, still-controlled bump.
 _HYBRID_TITLE_EXACT_BONUS = 0.25  # ×(1 + 0.25) on top of coverage boost
 
-# Number of top-ranked page chunks fed to the grounded LLM context.
-# Mirrors AI mode's retrieval_top_k budget; kept small so hybrid latency
-# (rerank-dominated) does not grow meaningfully with generation.
+# Number of top-ranked chunks fed to the grounded LLM context.
+# CHUNK-level (not page-deduped): the exchange-rates page carries one chunk
+# per currency, so page dedup would collapse the context to a single currency
+# (user-reported: hybrid answered USD-only while AI mode listed most
+# currencies). Chunk-level context mirrors AI mode's grounded granularity;
+# ContextBuilder still dedupes near-duplicates and caps the token budget.
 _HYBRID_CONTEXT_TOP_CHUNKS = settings.retrieval_top_k
+
+# The ranked page list below the answer IS the source list (user feedback) —
+# the "### Source" section is stripped from the generated answer.
+_SOURCE_SECTION = re.compile(r"\n###\s*Source\b.*$", re.DOTALL | re.IGNORECASE)
+
+
+def _strip_source_section(answer: str) -> str:
+    return _SOURCE_SECTION.sub("", answer).strip()
 
 
 @dataclass(frozen=True)
@@ -400,22 +412,7 @@ class HybridPageSearchService:
                 )
             )
 
-        candidate_chunks = [
-            RetrievedChunk(
-                chunk_id=page.chunk_id,
-                document_id=page.document_id,
-                title=page.title,
-                url=page.url,
-                language=page.language,
-                text=page.text,
-                score=score,
-                doc_type=page.doc_type,
-                category=page.category,
-                is_stub=False,
-                canonical_url_slug="",
-            )
-            for page, score in candidates
-        ]
+        candidate_chunks = list(ranked)  # CHUNK-level: same-page chunks all eligible for context
 
         outcome = HybridPagesOutcome(
             results=results,
@@ -538,7 +535,7 @@ class HybridPageSearchService:
             # Insufficient evidence — abstain; pages are still returned.
             return None, [], 0.0
 
-        answer, llm_confidence = await self._get_llm().generate_answer(
+        answer, llm_confidence = await self._generate_with_hybrid_prompt(
             query,
             built.context_text,
             language,
@@ -553,4 +550,26 @@ class HybridPageSearchService:
             citations=built.citations,
             intent="hybrid_search",
         )
-        return answer, built.citations, llm_confidence
+        # The ranked page list below the answer is the source list — drop the
+        # duplicated "### Source" section from the generated answer.
+        return _strip_source_section(answer), built.citations, llm_confidence
+
+    async def _generate_with_hybrid_prompt(
+        self,
+        query: str,
+        context: str,
+        language: str,
+    ) -> tuple[str | None, float]:
+        """`LLMService.generate_answer` with the hybrid RAG prompt override.
+
+        Broad rate questions must list every currency in the retrieved table,
+        not just USD (the shared prompt's single-currency template). AI mode
+        keeps its exact prompt — the override flag is set only for this call
+        and restored immediately (no shared-state leakage).
+        """
+        llm = self._get_llm()
+        try:
+            llm.hybrid_broad_answer = True
+            return await llm.generate_answer(query, context, language)
+        finally:
+            llm.hybrid_broad_answer = False

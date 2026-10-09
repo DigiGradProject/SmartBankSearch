@@ -367,3 +367,36 @@ and drops sharply once models are warm/served.
   identical to Phase-1 HYBRID on the same subset (retrieval ordering untouched by
   generation — the eval calls the ranking-only path, and the live e2e asserted the
   same page list with and without an answer).
+
+### Phase 2a — user feedback fixes (2026-10-09, same day)
+
+Live-use feedback surfaced two output-quality issues, both fixed and live-verified:
+
+1. **Exchange-rate answers were USD-only.** Two causes:
+   - *Retrieval*: the grounded context was built from page-deduped chunks, so the
+     exchange-rates page contributed only its single best chunk. Fixed by feeding
+     the context from the CHUNK-level ranked pool (`context_chunks` no longer
+     deduped) — mirrors AI mode's granularity and lets every same-page currency
+     rate into the grounded context.
+   - *Prompt*: the shared `RAG_USER_PROMPT` special-cases "asks for exchange rates"
+     into a single-currency template (`### Currency / Buying Rate / Selling Rate`),
+     so even with full evidence the LLM picked USD. AI mode had the same behavior
+     (verified live: AI mode also returned USD-only for "exchange rates"). Added a
+     hybrid-scoped prompt override (`LLMService.hybrid_broad_answer`, set only
+     around the hybrid generate call and restored immediately — test-enforced):
+     when the retrieved table lists several currencies, answer with one line per
+     currency (`<Currency> — Buy x / Sell y`) plus `### Last Updated`; the narrow
+     template remains for single-currency questions. AI mode's prompt is untouched.
+   - Live result for "exchange rates" in hybrid: **15 currencies** with Buy/Sell
+     rates + last-updated timestamp (was USD-only).
+2. **Duplicated source info.** The hybrid tab already shows the ranked NBE pages
+   below the answer, so the generated answer now strips the `### Source` section
+   (`test_hybrid_prompt_override_scoped_and_restored` asserts both the strip and
+   that the shared default prompt is unchanged for AI mode).
+
+- `pytest tests/unit` → **236 passed** (235 + 1 new prompt-scoping test).
+
+| File | Change |
+|---|---|
+| `services/llm_service/llm.py` | `_build_prompt` gains the hybrid-scoped multi-currency exchange-rate template swap (`hybrid_broad_answer` flag; default prompt byte-identical when flag off) |
+| `services/search_service/hybrid_pages.py` | chunk-level grounded context (`context_chunks` = ranked pool pre-dedup); `_generate_with_hybrid_prompt` sets/restores `hybrid_broad_answer`; `### Source` stripped from the generated answer |

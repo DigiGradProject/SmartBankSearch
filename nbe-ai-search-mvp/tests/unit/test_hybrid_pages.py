@@ -430,6 +430,8 @@ def test_search_with_answer_returns_frozen_pages_plus_answer():
     assert outcome.answer and "Platinum facts" in outcome.answer
     assert outcome.answer.startswith("### ")
     assert len(outcome.citations) == 1
+    # Chunk-level context keeps the rerank order (Page A first — same-page
+    # chunks no longer collapse), so the top-ranked chunk is cited.
     assert outcome.citations[0].url == "https://www.nbe.com.eg/EN/a"
     assert outcome.answer_confidence == pytest.approx(0.78)
     # Page ranking untouched by generation — identical to plain search() output
@@ -437,10 +439,14 @@ def test_search_with_answer_returns_frozen_pages_plus_answer():
     assert [r.title for r in outcome.results] == [
         r.title for r in svc.search("platinum", "en", limit=5).results
     ]
-    # Grounded context built from the top ranked chunks (frozen order).
+    # Grounded context is CHUNK-level (same-page chunks all eligible — currency-
+    # table fix) and follows the frozen rerank order.
     query, chunk_ids = builder.calls[0]
     assert chunk_ids == ["a", "b"]
     assert query == "platinum"
+    # The ranked page list below the answer is the source list — the LLM's
+    # "### Source" section must be stripped from the hybrid answer.
+    assert "### Source" not in outcome.answer
     # Latency bookkeeping split.
     assert outcome.generation_ms is not None and outcome.total_ms is not None
 
@@ -518,3 +524,37 @@ def test_search_plain_has_no_answer_fields():
     assert outcome.citations == []
     assert outcome.generation_error is False
     assert outcome.generation_ms is None
+
+
+def test_hybrid_prompt_override_scoped_and_restored():
+    """Requirement: broad rate questions get the multi-currency template in
+    hybrid mode ONLY — the shared LLMService default prompt is untouched for
+    AI mode, and the override flag is restored after every call."""
+    from services.llm_service.llm import LLMService
+
+    llm = LLMService()
+    assert not getattr(llm, "hybrid_broad_answer", False)
+
+    captured: dict[str, str] = {}
+
+    class _CapturingLLM(LLMService):
+        async def generate_answer(self, query, context, language):
+            captured["prompt"] = self._build_prompt(query, context, language)
+            captured["flag_during_call"] = str(getattr(self, "hybrid_broad_answer", False))
+            return "### Answer\n\nUS DOLLAR — Buy 50.87 / Sell 50.97\n- EURO — Buy 59.37 / Sell 59.69\n\n### Last Updated\n\n20 August 2026", 0.78
+
+    capturing = _CapturingLLM()
+    svc = _rag_service(llm=capturing)
+    outcome = asyncio.run(svc.search_with_answer("exchange rates", "en", limit=5))
+    assert outcome.answer and "EURO" in outcome.answer
+    assert "### Source" not in outcome.answer
+    # Override active DURING the generate call.
+    assert captured["flag_during_call"] == "True"
+    # Multi-currency template replaces the single-currency one.
+    assert "one line per currency" in captured["prompt"]
+    assert "### Buying Rate" not in captured["prompt"] or "full table" in captured["prompt"]
+    # Restored afterwards — AI mode's prompt is untouched.
+    assert not getattr(capturing, "hybrid_broad_answer", False)
+    default_prompt = capturing._build_prompt("exchange rates", "ctx", "en")
+    assert "one line per currency" not in default_prompt
+    assert "If the question asks for exchange rates" in default_prompt
