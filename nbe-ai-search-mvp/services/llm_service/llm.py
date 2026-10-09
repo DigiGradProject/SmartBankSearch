@@ -279,7 +279,17 @@ class LLMService:
         return None, 0.0
 
     def _build_prompt(self, query: str, context: str, language: str) -> str:
-        return RAG_USER_PROMPT.format(context=context, language=language, query=query)
+        prompt = RAG_USER_PROMPT.format(context=context, language=language, query=query)
+        # Hybrid RAG override (mirrored in HybridRAGVariants below): for broad
+        # rate queries the single-currency template made answers USD-only while
+        # the context carries the whole rate table. Listed here so the special
+        # case lives beside the prompt it modifies.
+        if getattr(self, "hybrid_broad_answer", False):
+            prompt = prompt.replace(
+                "If the question asks for exchange rates:\n\nReturn\n\n### Currency\n...\n\n### Buying Rate\n...\n\n### Selling Rate\n...\n\n### Last Updated\n...\n\n### Source\n...",
+                "If the question asks for exchange rates and the retrieved rate\ntable lists more than one currency, return the full table as\n\n### Answer\n\n- <Currency> — Buy <x> / Sell <y>  (one line per currency)\n\nplus\n\n### Last Updated\n\n<latest update timestamp from the table>\n\nOnly use the narrower single-currency template when the question\nnames exactly one currency.",
+            )
+        return prompt
 
     async def _generate_with_model(
         self,
