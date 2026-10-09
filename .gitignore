@@ -56,6 +56,8 @@ nbe-ai-search-mvp/data/bm25/
 nbe-ai-search-mvp/data/documents.json
 nbe-ai-search-mvp/data/coverage_report.json
 nbe-ai-search-mvp/data/pdfs/
+# Live-eval run output (regenerate via scripts/eval_live_search.py)
+nbe-ai-search-mvp/data/reports/
 
 # --- Scrape cleaner outputs (regenerate via pipeline) ---
 nbe-scrape-cleaner/output/*.jsonl
