@@ -263,13 +263,13 @@ class LLMService:
 
         # Escalate to tier-2 when tier-1 abstains/refuses and models differ.
         if (
-            settings.llm_tier2_enabled
+            self._tier2_enabled()
             and primary == self.tier1_model
             and self.tier2_model != self.tier1_model
         ):
             logger.info("llm_escalate_tier2", from_model=primary, to_model=self.tier2_model)
             answer, confidence = await self._generate_with_model(
-                self.tier2_model, query, context, language
+                self.tier2_model, query, context, language, timeout=self._timeout()
             )
             if answer:
                 return answer, min(0.85, confidence + 0.05)
@@ -277,6 +277,19 @@ class LLMService:
         if settings.llm_fallback_enabled:
             return self._fallback_answer(query, context, language), 0.55
         return None, 0.0
+
+    # Hybrid RAG call-scoped overrides (set by HybridPageSearchService around
+    # its generate call, restored after — see hybrid_pages._generate_with_hybrid_prompt).
+    # Default getters keep AI mode's exact behavior; without the hybrid budget a
+    # slow Ollama burns 2×90s (tier1+tier2) and the UI proxy cuts the connection
+    # before the backend answers (live incident, 2026-10-09).
+    def _timeout(self) -> float:
+        return getattr(self, "hybrid_broad_answer", False) and settings.hybrid_llm_timeout_seconds or settings.llm_timeout_seconds
+
+    def _tier2_enabled(self) -> bool:
+        if getattr(self, "hybrid_broad_answer", False):
+            return settings.hybrid_llm_tier2_enabled
+        return settings.llm_tier2_enabled
 
     def _build_prompt(self, query: str, context: str, language: str) -> str:
         prompt = RAG_USER_PROMPT.format(context=context, language=language, query=query)
@@ -297,10 +310,12 @@ class LLMService:
         query: str,
         context: str,
         language: str,
+        *,
+        timeout: float | None = None,
     ) -> tuple[str | None, float]:
         prompt = self._build_prompt(query, context, language)
         try:
-            async with httpx.AsyncClient(timeout=settings.llm_timeout_seconds) as client:
+            async with httpx.AsyncClient(timeout=timeout if timeout is not None else settings.llm_timeout_seconds) as client:
                 response = await client.post(
                     f"{self.base_url}/api/generate",
                     json={

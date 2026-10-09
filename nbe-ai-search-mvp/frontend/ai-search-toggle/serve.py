@@ -50,7 +50,11 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
             if self.headers.get(header):
                 request.add_header(header, self.headers[header])
         try:
-            with urllib.request.urlopen(request, timeout=180) as response:
+            # Hybrid RAG budget: retrieval (~15-45s CPU) + ONE LLM attempt
+            # (capped at hybrid_llm_timeout_seconds=45s server-side) + margin.
+            # 150s sits above any legal backend response; the previous 180s was
+            # below the old unbounded 2×90s path and cut live requests.
+            with urllib.request.urlopen(request, timeout=150) as response:
                 payload = response.read()
                 self.send_response(response.status)
                 content_type = response.headers.get("Content-Type", "application/json")

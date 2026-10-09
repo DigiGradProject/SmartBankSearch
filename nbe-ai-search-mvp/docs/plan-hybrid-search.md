@@ -400,3 +400,31 @@ Live-use feedback surfaced two output-quality issues, both fixed and live-verifi
 |---|---|
 | `services/llm_service/llm.py` | `_build_prompt` gains the hybrid-scoped multi-currency exchange-rate template swap (`hybrid_broad_answer` flag; default prompt byte-identical when flag off) |
 | `services/search_service/hybrid_pages.py` | chunk-level grounded context (`context_chunks` = ranked pool pre-dedup); `_generate_with_hybrid_prompt` sets/restores `hybrid_broad_answer`; `### Source` stripped from the generated answer |
+
+### Phase 2b — hotfix: request timeout kill-line (branch `fix/hybrid-rag-timeout`, 2026-10-09)
+
+**Live incident**: a hybrid query took **~206s** — tier-1 (qwen3:8b) AND tier-2
+(qwen3:14b) each burned the full 90s `llm_timeout_seconds`, then the keyword fallback
+answered at 206s. The UI proxy cut the connection at its 180s ceiling first, so the
+browser showed **"Something went wrong"** while the backend eventually succeeded.
+Any slow/stuck Ollama turn could reproduce this arbitrarily.
+
+Fix — the hybrid generation call gets a hard budget inside the LLM client:
+
+- `shared/config.py`: `hybrid_llm_timeout_seconds=45.0`, `hybrid_llm_tier2_enabled=False`.
+- `services/llm_service/llm.py`: `_timeout()`/`_tier2_enabled()` read the hybrid budget
+  when the (already existing, call-scoped) `hybrid_broad_answer` flag is set; AI mode
+  keeps the legacy 90s + tier-2 behavior byte-for-byte. `_generate_with_model` accepts
+  a per-call `timeout=` override so no global timing state is mutated.
+- `frontend/ai-search-toggle/serve.py`: proxy ceiling stays ABOVE the worst-case legal
+  hybrid response (retrieval ~45s + one 45s LLM attempt + margin) — 150s, down from 180s
+  which previously sat below the unbounded 2×90s path that broke it.
+
+Worst-case hybrid latency is now retrieval (~15–45s, warm ≪) + one bounded 45s LLM attempt
++ fallback ms → always under the proxy's 150s. Verified live twice: `exchange rates NBE`
+→ HTTP 200 in 72.9s (16 currencies, no Source section, 10 pages), `best savings
+certificate interest rate` → HTTP 200 in 25.9s. No `llm_escalate_tier2`, no tier-1 90s
+burn in the logs.
+
+- `pytest tests/unit` → **238 passed** (+2: hybrid budget asserts tier/timeout scoping
+  AND proxy-ceiling inequality; `_generate_with_model` per-call timeout signature).
