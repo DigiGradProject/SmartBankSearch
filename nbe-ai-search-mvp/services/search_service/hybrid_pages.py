@@ -1,18 +1,23 @@
-"""Hybrid page search — dense + BM25 fusion for the Hybrid tab, no LLM.
+"""Hybrid page search — dense + BM25 fusion for the Hybrid tab + grounded RAG answer.
 
-Pipeline (user-approved plan, docs/plan-hybrid-search.md):
+Pipeline (user-approved plan, docs/plan-hybrid-search.md §1b Hybrid RAG):
 
     BM25 Top 50  +  BGE-M3 dense Top 50
               ↓  RRF (reciprocal rank fusion)
             Top 30
               ↓  BGE reranker (cross-encoder)
               ↓  light title / exact-match boost (controlled, NOT a hard override)
-            Top 10 page-level results
+            Top 10 page-level results  ← FROZEN ranking; generation never reorders it
+              ↓  grounded context from top ranked chunks (ContextBuilder)
+              ↓  existing LLMService.generate_answer (grounding + NO_ANSWER abstention)
+            answer + citations (URLs from retrieved pages only) → shown FIRST in the UI,
+            followed by the ranked page list.
 
-Retrieval-only: no LLM answer, no business-rule ranking, no confidence gate,
-no AI-mode caching. Query prep reuses the *traditional* keyword pipeline
-(stopwords + light stems only) so hybrid behaves like a pure dense+lexical
-experiment — no intent rewriting, no synonym expansion.
+NOT inherited from AI mode (deliberate): intent business-rule boosts, query
+expansion/planning, exact + semantic caches, confidence gate, catalog answer
+builders, self-eval regeneration loop (one LLM call keeps latency bounded on
+the already rerank-heavy pipeline). The LLM call fails OPEN: on any error the
+request still returns the ranked pages.
 
 Everything downstream of the channel queries reuses existing, tested code:
 `reciprocal_rank_fusion`, `get_reranker`, `traditional.prepare_keyword_query`,
@@ -22,11 +27,14 @@ Everything downstream of the channel queries reuses existing, tested code:
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field, replace
 
 from ingestion.embedding.vector_store import RetrievedChunk, VectorStore
 from ingestion.lexical.bm25_index import BM25Index, IndexedChunk, get_bm25_index
-from ingestion.lexical.bm25_index import IndexedChunk
+from services.context_builder.builder import BuiltContext, ContextBuilder
+from services.llm_service.llm import LLMService
+from services.rag.response_formatter import wrap_plain_answer
 from services.search_service.keyword_rank import extract_query_terms
 from services.search_service.reranker import get_reranker
 from services.search_service.hybrid_retriever import reciprocal_rank_fusion
@@ -39,7 +47,7 @@ from services.search_service.traditional import (
 from shared.arabic_normalize import normalize_arabic
 from shared.config import settings
 from shared.logging import get_logger
-from shared.schemas import TraditionalResult
+from shared.schemas import Citation, TraditionalResult
 from shared.url_canonical import canonical_url_key
 
 logger = get_logger(__name__)
@@ -55,10 +63,15 @@ _HYBRID_TITLE_BOOST = 0.35  # ×(1 + 0.35·coverage) → up to ×1.35
 # Exact normalized-title match gets a slightly stronger, still-controlled bump.
 _HYBRID_TITLE_EXACT_BONUS = 0.25  # ×(1 + 0.25) on top of coverage boost
 
+# Number of top-ranked page chunks fed to the grounded LLM context.
+# Mirrors AI mode's retrieval_top_k budget; kept small so hybrid latency
+# (rerank-dominated) does not grow meaningfully with generation.
+_HYBRID_CONTEXT_TOP_CHUNKS = settings.retrieval_top_k
+
 
 @dataclass(frozen=True)
 class HybridPagesOutcome:
-    """Ranked page list for the Hybrid tab (TraditionalResult contract)."""
+    """Hybrid-tab payload: FROZEN page ranking + optional grounded answer."""
 
     results: list[TraditionalResult] = field(default_factory=list)
     total: int = 0
@@ -70,6 +83,20 @@ class HybridPagesOutcome:
     fused_candidates: int = 0
     reranked: bool = False
     title_boost_applied: bool = False
+    # --- Phase 2: grounded RAG answer (answers generate AFTER ranking) ---
+    answer: str | None = None
+    citations: list[Citation] = field(default_factory=list)
+    answer_confidence: float = 0.0
+    # True only when generation itself threw (context build / LLM client);
+    # LLM refusals (insufficient evidence) are NOT errors.
+    generation_error: bool = False
+    # Top normalized page chunks feeding the grounded context (internal only,
+    # never serialized to the API response).
+    context_chunks: list[RetrievedChunk] = field(default_factory=list, repr=False)
+    # Latency bookkeeping (ms): retrieval vs generation vs total.
+    retrieval_ms: float | None = None
+    generation_ms: float | None = None
+    total_ms: float | None = None
 
 
 def _rerank_query_terms(query: str, language: str) -> list[str]:
@@ -195,7 +222,14 @@ def grouped_best_pages(
 
 
 class HybridPageSearchService:
-    """Dense + BM25 fusion behind the `mode="hybrid"` API contract."""
+    """Dense + BM25 fusion behind the `mode="hybrid"` API contract.
+
+    Phase 2: `search_with_answer` wraps `search` (FROZEN ranking) and adds a
+    grounded LLM answer from the top ranked chunks. Retrieval ordering is
+    never touched by generation; an LLM failure degrades to pages-only.
+    LLM infra is injected (test seams) but defaults to the SAME service AI
+    mode uses — no duplicate implementation.
+    """
 
     def __init__(
         self,
@@ -204,10 +238,14 @@ class HybridPageSearchService:
         reranker=None,  # noqa: ANN001 — test seam
         *,
         bm25_disabled: bool = False,
+        context_builder: ContextBuilder | None = None,
+        llm_service: LLMService | None = None,
     ) -> None:
         self._vector_store = vector_store
         self._bm25_index = bm25_index
         self._reranker = reranker
+        self._context_builder = context_builder
+        self._llm_service = llm_service
         # True when tests deliberately pass bm25_index=None: BM25 is then
         # "configured off" for this instance, so dense-only is a degradation,
         # not an index-load fallthrough (which would retry the real pickle).
@@ -226,6 +264,12 @@ class HybridPageSearchService:
     def _get_vector_store(self) -> VectorStore:
         return self._vector_store or VectorStore()
 
+    def _get_context_builder(self) -> ContextBuilder:
+        return self._context_builder or ContextBuilder()
+
+    def _get_llm(self) -> LLMService:
+        return self._llm_service or LLMService()
+
     # ------------------------------------------------------------------
     # Pipeline
     # ------------------------------------------------------------------
@@ -238,6 +282,8 @@ class HybridPageSearchService:
         limit: int | None = None,
         offset: int = 0,
     ) -> HybridPagesOutcome:
+        """Retrieval only — frozen page ranking, no LLM (Phase 1 contract)."""
+        t0 = time.perf_counter()
         page_size = limit or settings.keyword_results_limit
         page_size = max(1, min(page_size, settings.keyword_results_max_limit))
         offset = max(0, offset)
@@ -354,20 +400,24 @@ class HybridPageSearchService:
                 )
             )
 
-        logger.info(
-            "hybrid_search_completed",
-            language=resolved_language,
-            effective=kw.effective,
-            dense=len(dense_chunks),
-            bm25=len(bm25_hits),
-            fused=len(fused),
-            reranked=reranked,
-            pages=total,
-            returned=len(results),
-            offset=offset,
-            limit=page_size,
-        )
-        return HybridPagesOutcome(
+        candidate_chunks = [
+            RetrievedChunk(
+                chunk_id=page.chunk_id,
+                document_id=page.document_id,
+                title=page.title,
+                url=page.url,
+                language=page.language,
+                text=page.text,
+                score=score,
+                doc_type=page.doc_type,
+                category=page.category,
+                is_stub=False,
+                canonical_url_slug="",
+            )
+            for page, score in candidates
+        ]
+
+        outcome = HybridPagesOutcome(
             results=results,
             total=total,
             language=resolved_language,
@@ -377,4 +427,130 @@ class HybridPageSearchService:
             reranked=reranked,
             title_boost_applied=True,
             bm25_available=bm25 is not None,
+            context_chunks=candidate_chunks,
+            retrieval_ms=round((time.perf_counter() - t0) * 1000.0, 1),
         )
+        retrieval_ms = (time.perf_counter() - t0) * 1000.0
+        logger.info(
+            "hybrid_search_completed",
+            language=resolved_language,
+            effective=kw.effective,
+            dense=len(dense_chunks),
+            bm25=len(bm25_hits),
+            fused=len(fused),
+            fused_candidates=len(fused),
+            reranked=reranked,
+            pages=total,
+            returned=len(results),
+            offset=offset,
+            limit=page_size,
+            retrieval_ms=round(retrieval_ms, 1),
+        )
+        return outcome
+
+    # ------------------------------------------------------------------
+    # Phase 2 — grounded answer generation (Hybrid RAG)
+    # ------------------------------------------------------------------
+
+    async def search_with_answer(
+        self,
+        query: str,
+        language: str = "auto",
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> HybridPagesOutcome:
+        """`search` (frozen ranking) + grounded LLM answer from the top pages.
+
+        The results list is built BEFORE generation and never reordered —
+        the LLM only adds `answer` + `citations` on top. Any generation
+        failure degrades to pages-only; the request never fails because of
+        the LLM.
+        """
+        t_total = time.perf_counter()
+        outcome = self.search(query, language, limit=limit, offset=offset)
+        if not outcome.context_chunks or offset > 0:
+            # No retrieval evidence (or a pagination page): answers are only
+            # generated for the first page of results.
+            return outcome
+
+        t_gen = time.perf_counter()
+        try:
+            answer, citations, llm_confidence = await self._generate_grounded_answer(
+                query, outcome.context_chunks, outcome.language
+            )
+        except Exception as exc:  # noqa: BLE001 — generation must never fail the request
+            logger.warning("hybrid_answer_generation_failed", error=str(exc))
+            outcome = replace(
+                outcome,
+                generation_error=True,
+                total_ms=round((time.perf_counter() - t_total) * 1000.0, 1),
+                generation_ms=None,
+            )
+            logger.info(
+                "hybrid_search_with_answer_completed",
+                answered=False,
+                generation_error=True,
+                total_ms=outcome.total_ms,
+            )
+            return outcome
+        generation_ms = (time.perf_counter() - t_gen) * 1000.0
+
+        outcome = replace(
+            outcome,
+            answer=answer,
+            citations=citations,
+            answer_confidence=llm_confidence if answer else 0.0,
+            generation_error=False,
+            total_ms=round((time.perf_counter() - t_total) * 1000.0, 1),
+            generation_ms=round(generation_ms, 1),
+        )
+        logger.info(
+            "hybrid_search_with_answer_completed",
+            answered=bool(answer),
+            generation_error=False,
+            citations=len(citations),
+            generation_ms=outcome.generation_ms,
+            total_ms=outcome.total_ms,
+        )
+        return outcome
+
+    async def _generate_grounded_answer(
+        self,
+        query: str,
+        chunks: list[RetrievedChunk],
+        language: str,
+    ) -> tuple[str | None, list[Citation], float]:
+        """Grounded answer strictly from the retrieved page chunks.
+
+        Reuses AI-mode building blocks verbatim (user requirement #5):
+        `ContextBuilder.build` for grounded context + citation selection and
+        `LLMService.generate_answer` for the grounding/NO_ANSWER contract.
+        Compression is OFF — the reranker already picked and ordered these
+        top chunks, so the context order preserves the frozen ranking.
+        """
+        built = self._get_context_builder().build(
+            query,
+            chunks[:_HYBRID_CONTEXT_TOP_CHUNKS],
+            compress=False,
+        )
+        if not built.context_text:
+            # Insufficient evidence — abstain; pages are still returned.
+            return None, [], 0.0
+
+        answer, llm_confidence = await self._get_llm().generate_answer(
+            query,
+            built.context_text,
+            language,
+        )
+        if not answer:
+            # LLM refused (NO_ANSWER / insufficient evidence) or is down:
+            # abstain gracefully, keep the ranked pages.
+            return None, built.citations, llm_confidence
+        answer = wrap_plain_answer(
+            answer,
+            language=language,
+            citations=built.citations,
+            intent="hybrid_search",
+        )
+        return answer, built.citations, llm_confidence

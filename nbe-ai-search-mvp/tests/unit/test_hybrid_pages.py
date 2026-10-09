@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import pytest
 
 from ingestion.embedding.vector_store import RetrievedChunk
@@ -363,3 +364,157 @@ def test_platinum_case_with_strong_body_heavy_competitor():
     outcome = service.search("National Bank of Egypt - Platinum", "en", limit=5)
     # Reranker reverses: plat (0.75) first anyway; boost keeps it first.
     assert outcome.results[0].title == "National Bank of Egypt - Platinum"
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — Hybrid RAG: grounded answer + citations (frozen page ranking)
+# ---------------------------------------------------------------------------
+
+
+class _FakeLLM:
+    """Test double for LLMService.generate_answer (seam like _FakeReranker)."""
+
+    def __init__(self, answer="### Answer\n\nPlatinum facts\n\n### Source\n\n- Page A", *, fail=False):
+        self.answer = answer
+        self.fail = fail
+        self.calls: list[tuple[str, str]] = []
+
+    async def generate_answer(self, query: str, context: str, language: str):
+        if self.fail:
+            raise RuntimeError("LLM down")
+        self.calls.append((query, context))
+        return self.answer, 0.78
+
+
+class _FakeContextBuilder:
+    """Mirrors ContextBuilder.build's contract with a fixed citation list."""
+
+    def __init__(self, citations=None):
+        self.citations = citations or []
+        self.calls: list[tuple[str, list[str]]] = []
+
+    def build(self, query, chunks, *, compress=True):
+        self.calls.append((query, [c.chunk_id for c in chunks]))
+        from services.context_builder.builder import BuiltContext
+        from shared.schemas import Citation
+
+        citations = self.citations or [
+            Citation(title=chunks[0].title, url=chunks[0].url, relevance_score=0.9, reranker_score=0.9)
+        ] if chunks else []
+        context = "\n\n".join(f"[{i}] {c.text}" for i, c in enumerate(chunks, 1))
+        return BuiltContext(context_text=context, citations=list(citations), token_estimate=100)
+
+
+def _rag_service(llm=None, builder=None, dense=None):
+    return HybridPageSearchService(
+        vector_store=_FakeVectorStore(
+            dense or [
+                _dense("a", "Page A", 0.9, "platinum card features text"),
+                _dense("b", "Page B", 0.6, "more platinum text"),
+            ]
+        ),
+        bm25_index=_FakeBM25([]),
+        reranker=_FakeReranker(),
+        context_builder=builder,
+        llm_service=llm,
+    )
+
+
+
+def test_search_with_answer_returns_frozen_pages_plus_answer():
+    llm = _FakeLLM()
+    builder = _FakeContextBuilder()
+    svc = _rag_service(llm=llm, builder=builder)
+    outcome = asyncio.run(svc.search_with_answer("platinum", "en", limit=5))
+    # Answer + citations populated (wrapped in the structured template).
+    assert outcome.answer and "Platinum facts" in outcome.answer
+    assert outcome.answer.startswith("### ")
+    assert len(outcome.citations) == 1
+    assert outcome.citations[0].url == "https://www.nbe.com.eg/EN/a"
+    assert outcome.answer_confidence == pytest.approx(0.78)
+    # Page ranking untouched by generation — identical to plain search() output
+    # (_FakeReranker reverses without rescoring, so grouped order sorts by score).
+    assert [r.title for r in outcome.results] == [
+        r.title for r in svc.search("platinum", "en", limit=5).results
+    ]
+    # Grounded context built from the top ranked chunks (frozen order).
+    query, chunk_ids = builder.calls[0]
+    assert chunk_ids == ["a", "b"]
+    assert query == "platinum"
+    # Latency bookkeeping split.
+    assert outcome.generation_ms is not None and outcome.total_ms is not None
+
+
+
+def test_search_with_answer_citations_come_from_retrieved_urls_only():
+    llm = _FakeLLM()
+    svc = _rag_service(llm=llm)
+    outcome = asyncio.run(svc.search_with_answer("platinum", "en", limit=5))
+    retrieved_urls = {r.url for r in outcome.results}
+    assert outcome.citations
+    for citation in outcome.citations:
+        assert citation.url in retrieved_urls
+
+
+
+def test_search_with_answer_abstains_on_empty_context():
+    """Insufficient evidence → no answer; ranked pages survive (abstention #6)."""
+
+    class _EmptyBuilder:
+        def build(self, query, chunks, *, compress=True):
+            from services.context_builder.builder import BuiltContext
+
+            return BuiltContext(context_text="", citations=[], token_estimate=0)
+
+    builder = _EmptyBuilder()
+    llm = _FakeLLM()
+    svc = _rag_service(llm=llm, builder=builder)
+    outcome = asyncio.run(svc.search_with_answer("platinum", "en", limit=5))
+    assert outcome.answer is None
+    assert outcome.citations == []
+    assert outcome.generation_error is False  # abstention, not failure
+    assert outcome.results  # page list unaffected
+    assert not llm.calls  # LLM never invoked without evidence
+
+
+
+def test_search_with_answer_llm_failure_returns_pages():
+    """LLM throw → fail-open: the request keeps the full page list (req #7)."""
+    llm = _FakeLLM(fail=True)
+    svc = _rag_service(llm=llm)
+    outcome = asyncio.run(svc.search_with_answer("platinum", "en", limit=5))
+    assert outcome.answer is None
+    assert outcome.generation_error is True
+    assert [r.title for r in outcome.results] == ["Page A", "Page B"]
+    assert outcome.total > 0
+    assert outcome.total_ms is not None  # latency still tracked
+
+
+
+def test_search_with_answer_llm_refusal_abstains_with_pages():
+    """LLM 取 refusal (None answer) → abstain, keep pages (grounding contract)."""
+    llm = _FakeLLM(answer=None)
+    svc = _rag_service(llm=llm)
+    outcome = asyncio.run(svc.search_with_answer("platinum", "en", limit=5))
+    assert outcome.answer is None
+    assert outcome.generation_error is False
+    assert outcome.results
+    assert llm.calls  # LLM was called and refused on its own
+
+
+
+def test_search_with_answer_paginated_offset_skips_generation():
+    svc = _rag_service(llm=_FakeLLM(), builder=_FakeContextBuilder())
+    outcome = asyncio.run(svc.search_with_answer("platinum", "en", limit=5, offset=5))
+    assert outcome.answer is None  # answers only on page 1
+
+
+
+def test_search_plain_has_no_answer_fields():
+    """Phase 1 `search()` contract unchanged: retrieval-only, no LLM fields."""
+    svc = _rag_service(llm=_FakeLLM(), builder=_FakeContextBuilder())
+    outcome = svc.search("platinum", "en", limit=5)
+    assert outcome.answer is None
+    assert outcome.citations == []
+    assert outcome.generation_error is False
+    assert outcome.generation_ms is None

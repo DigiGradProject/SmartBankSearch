@@ -53,7 +53,9 @@ class SearchRequest(BaseModel):
     debug: bool = False
     # "ai" = full semantic RAG pipeline (default, unchanged behavior);
     # "traditional" = BM25 keyword results, no LLM;
-    # "hybrid" = dense + BM25 RRF fusion + reranker, page list, no LLM.
+    # "hybrid" = dense + BM25 RRF fusion + reranker + grounded LLM answer
+    #   (citations from the top ranked pages; page ordering never changed by
+    #   generation; LLM failure degrades to the pages-only list).
     mode: Literal["ai", "traditional", "hybrid"] = "ai"
     # Traditional-mode pagination (ignored by AI mode).
     limit: int | None = Field(default=None, ge=1, le=50)

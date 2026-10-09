@@ -87,24 +87,27 @@ def _log_traditional_event(request: SearchRequest, outcome, total_ms: float) -> 
 
 
 def _log_hybrid_event(request: SearchRequest, outcome, total_ms: float) -> None:  # noqa: ANN001 — HybridPagesOutcome
-    """Analytics + audit trail for hybrid (dense+BM25 fusion) searches."""
+    """Analytics + audit trail for hybrid (dense+BM25 fusion) + grounded answer."""
     import hashlib
 
+    answered = bool(outcome.answer) and bool(outcome.results)
     write_analytics_event(
         AnalyticsEvent(
             query=request.query,
             intent="hybrid_search",
             rewritten_query="",
+            retrieve_ms=outcome.retrieval_ms or 0.0,
+            llm_ms=outcome.generation_ms or 0.0,
             total_ms=round(total_ms, 1),
             top_documents=[
                 {"title": r.title, "url": r.url, "score": r.score, "category": r.category}
                 for r in outcome.results[:5]
             ],
-            confidence=1.0 if outcome.results else 0.0,
-            confidence_reason="hybrid_rrf_rerank_ranking",
-            decision="HYBRID_RESULTS" if outcome.results else "NO_RESULTS",
+            confidence=(outcome.answer_confidence if outcome.answer else (1.0 if outcome.results else 0.0)),
+            confidence_reason="hybrid_rrf_rerank_grounded_answer" if outcome.answer else "hybrid_rrf_rerank_ranking",
+            decision="HYBRID_RAG_ANSWER" if outcome.answer else ("HYBRID_RESULTS" if outcome.results else "NO_RESULTS"),
             language=outcome.language,
-            answered=bool(outcome.results),
+            answered=answered,
         )
     )
     if settings.audit_log_enabled:
@@ -116,12 +119,17 @@ def _log_hybrid_event(request: SearchRequest, outcome, total_ms: float) -> None:
                 "mode": "HYBRID",
                 "source_urls": [r.url for r in outcome.results[:10]],
                 "result_count": outcome.total,
-                "answered": bool(outcome.results),
-                "abstention_reason": None if outcome.results else "no_hybrid_matches",
+                "answered": answered,
+                "abstention_reason": None if outcome.answer else ("insufficient_context" if outcome.results else "no_hybrid_matches"),
+                "latency_ms": {
+                    "retrieval": round(outcome.retrieval_ms or 0.0, 1),
+                    "generation": round(outcome.generation_ms or 0.0, 1),
+                    "total": round(total_ms, 1),
+                },
                 "models": {
                     "embedding": settings.embedding_model,
                     "reranker": settings.reranker_model if outcome.reranked else "fallback",
-                    "llm": "none",
+                    "llm": settings.ollama_model if outcome.answer else ("none" if outcome.generation_ms is None else "unavailable"),
                 },
             }
         )
@@ -215,21 +223,14 @@ async def search(request: SearchRequest) -> SearchResponse:
     if request.mode == "hybrid":
         t0 = time.perf_counter()
         with HYBRID_LATENCY.time():
-            outcome = hybrid_page_search.search(
+            # Hybrid RAG: frozen-ranked pages + grounded LLM answer (fail-open:
+            # LLM errors/abstentions degrade to pages-only, never a 500).
+            outcome = await hybrid_page_search.search_with_answer(
                 request.query, request.language, limit=request.limit, offset=request.offset
             )
         total_ms = (time.perf_counter() - t0) * 1000.0
         suggestions = build_autocomplete(
             request.query, request.language, limit=5, catalog_only=False
-        )
-        guidance = (
-            None
-            if outcome.results
-            else (
-                "لم نجد نتائج مطابقة. جرّب كلمات مفتاحية أقل أو مختلفة."
-                if outcome.language == "ar"
-                else "No matching pages found. Try fewer or different keywords."
-            )
         )
         abstention = None
         if not outcome.results:
@@ -238,10 +239,33 @@ async def search(request: SearchRequest) -> SearchResponse:
                 if not outcome.bm25_available and not outcome.dense_candidates
                 else "no_hybrid_matches"
             )
+        elif outcome.answer is None:
+            # Ranked pages exist but no grounded answer (insufficient evidence
+            # or the LLM refused/failed) — pages-only response, not an outage.
+            abstention = "insufficient_context"
+        # Guidance text: when there is an answer or an abstention reason we let
+        # the answer card / reason speak; otherwise the no-results message.
+        if outcome.answer:
+            guidance = None
+        elif abstention == "insufficient_context":
+            guidance = (
+                "لم نجد محتوى كافياً في الصفحات المسترجعة للإجابة، لكن هذه أفضل الصفحات المطابقة:"
+                if outcome.language == "ar"
+                else "Not enough content in the retrieved pages for an answer, but these are the best-matching pages:"
+            )
+        else:
+            guidance = (
+                "لم نجد نتائج مطابقة. جرّب كلمات مفتاحية أقل أو مختلفة."
+                if outcome.language == "ar"
+                else "No matching pages found. Try fewer or different keywords."
+            )
         response = SearchResponse(
-            answer=None,
-            confidence=1.0 if outcome.results else 0.0,
-            citations=[],
+            # Answer + citations first (Hybrid RAG); results keep the frozen
+            # retrieval ranking — generation never reorders them.
+            answer=outcome.answer,
+            confidence=(outcome.answer_confidence if outcome.answer else (1.0 if outcome.results else 0.0)),
+            confidence_reason="hybrid_rrf_rerank_grounded_answer" if outcome.answer else None,
+            citations=outcome.citations,
             answered=bool(outcome.results),
             language=outcome.language,  # type: ignore[arg-type]
             abstention_reason=abstention,
